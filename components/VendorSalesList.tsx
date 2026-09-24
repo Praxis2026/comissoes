@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useCommission } from '@/lib/commission-context';
-import { StatusLancamento, Venda } from '@/lib/types';
-import { formatarDataBR } from '@/lib/utils';
+import { LancamentoComissao, StatusLancamento, Venda } from '@/lib/types';
+import { formatarDataBR, formatarMoedaBR } from '@/lib/utils';
+import { CommissionEstornoModal } from '@/components/CommissionEstornoModal';
 import {
   AlertCircle,
   AlertTriangle,
@@ -18,8 +19,10 @@ import {
   Filter,
   Layers,
   PlusCircle,
+  RotateCcw,
   Send,
   Trash2,
+  X,
   XCircle,
 } from 'lucide-react';
 
@@ -39,11 +42,15 @@ export function VendorSalesList({
   onSubAbaVendasChange,
 }: VendorSalesListProps) {
   const {
+    usuarios,
     usuarioAtual,
     vendas,
     lancamentos,
+    repasses,
+    adminOriginal,
     submeterParaAprovacao,
     excluirRascunho,
+    temPermissao,
   } = useCommission();
 
   const [statusLocal, setStatusLocal] = useState<string>('TODOS');
@@ -52,6 +59,28 @@ export function VendorSalesList({
     doc: string;
     texto: string;
   } | null>(null);
+  const [estornoModal, setEstornoModal] = useState<{
+    lancamento: LancamentoComissao;
+    venda: Venda;
+  } | null>(null);
+  const [sucessoFeedback, setSucessoFeedback] = useState<string | null>(null);
+  const [rascunhoParaExcluir, setRascunhoParaExcluir] = useState<{
+    venda: Venda;
+    lancamento?: LancamentoComissao;
+  } | null>(null);
+  const [erroExclusao, setErroExclusao] = useState<string | null>(null);
+
+  const handleConfirmarExclusaoRascunho = () => {
+    if (!rascunhoParaExcluir) return;
+    const res = excluirRascunho(rascunhoParaExcluir.venda.id);
+    if (res.sucesso) {
+      setSucessoFeedback(res.mensagem);
+      setRascunhoParaExcluir(null);
+      setErroExclusao(null);
+    } else {
+      setErroExclusao(res.mensagem);
+    }
+  };
 
   const tabelaContainerRef = useRef<HTMLDivElement>(null);
 
@@ -72,9 +101,21 @@ export function VendorSalesList({
 
   // Vendas do vendedor logado (ou todas se for Admin)
   const isAdmin = usuarioAtual.perfil_nome === 'ADMINISTRADOR';
-  const minhasVendas = vendas.filter(
-    (v) => isAdmin || v.vendedor_id === usuarioAtual.id
+  const [vendedorFiltroAdmin, setVendedorFiltroAdmin] = useState<string>('TODOS');
+  const vendedores = useMemo(
+    () => usuarios.filter((u) => u.perfil_nome === 'VENDEDOR'),
+    [usuarios]
   );
+
+  const minhasVendas = useMemo(() => {
+    if (!isAdmin) {
+      return vendas.filter((v) => v.vendedor_id === usuarioAtual.id);
+    }
+    if (vendedorFiltroAdmin !== 'TODOS') {
+      return vendas.filter((v) => v.vendedor_id === vendedorFiltroAdmin);
+    }
+    return vendas;
+  }, [vendas, isAdmin, usuarioAtual.id, vendedorFiltroAdmin]);
 
   // Combinar venda com lançamento
   const vendasComLancamento = minhasVendas.map((v) => {
@@ -100,7 +141,7 @@ export function VendorSalesList({
         formatarDataBR(venda.data_venda).toLowerCase().includes(q) ||
         venda.data_venda.toLowerCase().includes(q);
       const matchCliente = venda.cliente_nome.toLowerCase().includes(q);
-      const matchVendedor = (venda.vendedor_nome || '').toLowerCase().includes(q);
+      const matchVendedor = isAdmin ? (venda.vendedor_nome || '').toLowerCase().includes(q) : false;
       return matchDoc || matchSeq || matchData || matchCliente || matchVendedor;
     }
     return true;
@@ -252,8 +293,8 @@ export function VendorSalesList({
         );
       case 'ESTORNADO':
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-semibold text-zinc-800 border border-zinc-300">
-            <AlertTriangle className="h-3 w-3 text-zinc-600" />
+          <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800 border border-rose-200">
+            <RotateCcw className="h-3 w-3 text-rose-600" />
             Estornado
           </span>
         );
@@ -264,6 +305,23 @@ export function VendorSalesList({
 
   return (
     <div className="space-y-6">
+      {/* Feedback de sucesso de estorno */}
+      {sucessoFeedback && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 shadow-xs">
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>{sucessoFeedback}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSucessoFeedback(null)}
+            className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
+
       {/* Alerta de Aprovados aguardando conferência */}
       {qtdAprovados > 0 && !isAdmin && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/90 p-4 text-blue-900 shadow-xs">
@@ -379,11 +437,28 @@ export function VendorSalesList({
           })}
         </div>
 
-        {/* Search input & Nova Venda button */}
-        <div className="flex items-center gap-2">
+        {/* Search input, Admin Seller Filter & Nova Venda button */}
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs">
+              <span className="font-semibold text-slate-500 text-[11px]">Vendedor:</span>
+              <select
+                value={vendedorFiltroAdmin}
+                onChange={(e) => setVendedorFiltroAdmin(e.target.value)}
+                className="bg-transparent font-bold text-slate-800 text-xs focus:outline-hidden cursor-pointer"
+              >
+                <option value="TODOS">⭐ Todos ({vendas.length})</option>
+                {vendedores.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <input
             type="text"
-            placeholder="Buscar doc, cliente..."
+            placeholder={isAdmin ? "Buscar doc, cliente, vendedor..." : "Buscar doc, cliente..."}
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-44 sm:w-56 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
@@ -549,16 +624,22 @@ export function VendorSalesList({
                               : 'text-amber-700'
                           }`}
                         >
-                          {(lancamento?.percentual_entrada_calculado || 0).toFixed(2)}%
+                          {(lancamento?.percentual_entrada_calculado || 0).toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}%
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap font-medium text-slate-800">
                         {lancamento?.tipo_regra_aplicada === 'VALOR_FIXO'
-                          ? `R$ ${lancamento.aliquota_ou_fixo_aplicado.toFixed(2)}`
-                          : `${(lancamento?.aliquota_ou_fixo_aplicado || 0).toFixed(2)}%`}
+                          ? formatarMoedaBR(lancamento.aliquota_ou_fixo_aplicado, true)
+                          : `${(lancamento?.aliquota_ou_fixo_aplicado || 0).toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}%`}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap font-bold text-emerald-700">
-                        R$ {(lancamento?.valor_comissao_calculado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {formatarMoedaBR(lancamento?.valor_comissao_calculado, true)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {renderBadgeStatus(status)}
@@ -602,13 +683,13 @@ export function VendorSalesList({
                               </button>
 
                               <button
+                                type="button"
                                 onClick={() => {
-                                  if (confirm(`Excluir o rascunho da venda ${venda.numero_documento}?`)) {
-                                    excluirRascunho(venda.id);
-                                  }
+                                  setErroExclusao(null);
+                                  setRascunhoParaExcluir({ venda, lancamento });
                                 }}
-                                title="Excluir rascunho"
-                                className="rounded-md border border-slate-200 p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+                                title="Excluir rascunho de venda"
+                                className="rounded-md border border-slate-200 p-1 text-slate-400 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -637,9 +718,34 @@ export function VendorSalesList({
                           )}
 
                           {status === 'LIQUIDADO' && (
-                            <span className="text-[11px] text-purple-700 font-semibold">
-                              Repasse Efetuado
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] text-purple-700 font-semibold">
+                                Repasse Efetuado
+                              </span>
+                              {(isAdmin || adminOriginal !== null) && lancamento && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEstornoModal({ lancamento, venda })}
+                                  title="Estornar comissão paga desta venda (com compensação financeira)"
+                                  className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 hover:text-rose-900 transition-colors shadow-2xs cursor-pointer"
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                  <span>Estornar</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {status === 'ESTORNADO' && lancamento && (
+                            <button
+                              type="button"
+                              onClick={() => setEstornoModal({ lancamento, venda })}
+                              title="Ver histórico e auditoria detalhada do estorno"
+                              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-100 transition-colors shadow-2xs cursor-pointer"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              <span>Auditoria</span>
+                            </button>
                           )}
                         </div>
                       </td>
@@ -706,6 +812,167 @@ export function VendorSalesList({
                 className="rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-bold text-white hover:bg-slate-800"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Estorno de Comissão (Pré ou Pós-Repasse) */}
+      <CommissionEstornoModal
+        isOpen={Boolean(estornoModal)}
+        onClose={() => setEstornoModal(null)}
+        lancamento={estornoModal?.lancamento || null}
+        venda={estornoModal?.venda || null}
+        repasse={
+          estornoModal?.lancamento.repasse_id
+            ? repasses.find((r) => r.id === estornoModal.lancamento.repasse_id) || null
+            : null
+        }
+        onSucesso={(msg) => setSucessoFeedback(msg)}
+      />
+
+      {/* Modal de Confirmação de Exclusão de Rascunho */}
+      {rascunhoParaExcluir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
+            {/* Header com ícone de alerta */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+                  <AlertTriangle className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Confirmar Exclusão de Rascunho
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Esta ação removerá este rascunho de venda permanentemente.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRascunhoParaExcluir(null);
+                  setErroExclusao(null);
+                }}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Mensagem de Erro se houver */}
+            {erroExclusao && (
+              <div className="mt-4 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                <span>{erroExclusao}</span>
+              </div>
+            )}
+
+            {/* Corpo / Detalhes do Rascunho */}
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Tem certeza de que deseja excluir o rascunho da venda abaixo? Após confirmar, o registro e qualquer cálculo prévio de comissão associado serão permanentemente excluídos.
+              </p>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                  <span className="text-slate-500">Código / Identificador:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded bg-emerald-50 px-2 py-0.5 font-mono font-bold text-emerald-800 border border-emerald-200">
+                      {rascunhoParaExcluir.venda.codigo_venda ||
+                        (rascunhoParaExcluir.venda.numero_sequencial
+                          ? `#${String(rascunhoParaExcluir.venda.numero_sequencial).padStart(4, '0')}`
+                          : rascunhoParaExcluir.venda.numero_documento)}
+                    </span>
+                    <span className="font-semibold text-slate-800">
+                      ({rascunhoParaExcluir.venda.numero_documento})
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Cliente:</span>
+                  <span className="font-bold text-slate-900">
+                    {rascunhoParaExcluir.venda.cliente_nome}
+                  </span>
+                </div>
+
+                {rascunhoParaExcluir.venda.procedimentos && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Procedimento:</span>
+                    <span className="text-slate-700 truncate max-w-[220px]">
+                      {rascunhoParaExcluir.venda.procedimentos}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Data da Venda:</span>
+                  <span className="font-medium text-slate-800">
+                    {formatarDataBR(rascunhoParaExcluir.venda.data_venda)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/80">
+                  <div className="rounded-lg bg-white p-2 border border-slate-200">
+                    <span className="block text-[11px] text-slate-500">Valor da Venda</span>
+                    <span className="font-bold text-slate-900 text-xs">
+                      {formatarMoedaBR(rascunhoParaExcluir.venda.valor_total_venda, true)}
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-white p-2 border border-slate-200">
+                    <span className="block text-[11px] text-slate-500">Entrada Recebida</span>
+                    <span className="font-bold text-slate-900 text-xs">
+                      {formatarMoedaBR(rascunhoParaExcluir.venda.valor_entrada_valida, true)}{' '}
+                      <span className="text-[10px] text-slate-500 font-normal">
+                        ({rascunhoParaExcluir.venda.tipo_pagamento_entrada})
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                {rascunhoParaExcluir.lancamento && (
+                  <div className="rounded-lg bg-emerald-50/70 p-2.5 border border-emerald-200 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-emerald-800">
+                      Comissão Estimada:
+                    </span>
+                    <span className="font-extrabold text-emerald-700 text-xs">
+                      {formatarMoedaBR(rascunhoParaExcluir.lancamento.valor_comissao_calculado, true)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg bg-amber-50 p-3 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                <span>
+                  <strong>Aviso:</strong> Esta exclusão é definitiva. Caso deseje apenas alterar valores, percentuais ou dados do cliente, use a opção <strong>Editar</strong>.
+                </span>
+              </div>
+            </div>
+
+            {/* Botões de Ação */}
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setRascunhoParaExcluir(null);
+                  setErroExclusao(null);
+                }}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarExclusaoRascunho}
+                className="flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 transition-colors cursor-pointer"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Sim, Excluir Rascunho</span>
               </button>
             </div>
           </div>

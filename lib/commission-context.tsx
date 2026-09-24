@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import {
   FaixaEntradaComissao,
+  HistoricoEstorno,
   LancamentoComissao,
   MeioPagamentoConfig,
   MEIOS_PAGAMENTO_PADRAO,
@@ -24,7 +25,7 @@ import {
   USUARIOS_INICIAIS,
   VENDAS_E_LANCAMENTOS_INICIAIS,
 } from './commission-engine';
-import { formatarDataBR } from './utils';
+import { formatarDataBR, formatarMoedaBR } from './utils';
 import {
   gerarPermissoesPadrao,
   normalizarPermissoesUsuario,
@@ -90,14 +91,20 @@ interface CommissionContextType {
     comprovante_transacao: string;
     lancamentos_ids: string[];
     observacoes?: string;
-  }) => { sucesso: boolean; mensagem: string; repasseId?: string; repasse?: Repasse };
+  }) => { sucesso: boolean; mensagem: string; repasseId?: string; repasse?: Repasse; repasses?: Repasse[] };
   estornarLancamento: (lancamentoId: string, motivo: string) => { sucesso: boolean; mensagem: string };
+  estornarComissaoPaga: (dados: {
+    lancamentoId: string;
+    motivo: string;
+    formaCompensacao: 'DESCONTO_PROXIMO_REPASSE' | 'DEVOLUCAO_DIRETA';
+    comprovanteDevolucao?: string;
+  }) => { sucesso: boolean; mensagem: string };
   salvarRegra: (regra: Omit<RegraComissaoVendedor, 'id' | 'criado_em'> & { id?: string }) => {
     sucesso: boolean;
     mensagem: string;
     regraId?: string;
   };
-  excluirRegra: (regraId: string) => { sucesso: boolean; mensagem: string };
+  excluirRegra: (regraId: string) => { sucesso: boolean; mensagem: string; vendasAssociadas?: number };
   duplicarRegra: (regraId: string) => { sucesso: boolean; mensagem: string; novaRegra?: RegraComissaoVendedor };
   encerrarVigenciaRegra: (regraId: string, dataFim?: string) => { sucesso: boolean; mensagem: string };
   obterRegraVigente: (vendedorId: string, dataVenda: string) => RegraComissaoVendedor | undefined;
@@ -124,6 +131,11 @@ interface CommissionContextType {
   estaAutenticado: boolean;
   login: (email: string, senha?: string) => { sucesso: boolean; mensagem: string; usuario?: Usuario };
   logout: () => void;
+  // Impersonação / Navegação entre perfis pelo Administrador
+  adminOriginal: Usuario | null;
+  isImpersonating: boolean;
+  incorporarUsuario: (usuarioId: string) => { sucesso: boolean; mensagem: string };
+  voltarParaAdministrador: () => { sucesso: boolean; mensagem: string };
   // Identidade Visual & Logotipo
   logoEmpresa: string | null;
   salvarLogoEmpresa: (logo: string | null) => { sucesso: boolean; mensagem: string };
@@ -140,6 +152,7 @@ const STORAGE_KEYS = {
   LANCAMENTOS: 'comiss_db_lancamentos',
   REPASSES: 'comiss_db_repasses',
   CURRENT_USER_ID: 'comiss_db_current_user_id',
+  ADMIN_ORIGINAL_ID: 'comiss_db_admin_original_id',
   PARAMETROS: 'comiss_db_parametros',
   AUTH_STATUS: 'comiss_db_auth_status',
   LOGO_EMPRESA: 'comiss_db_logo_empresa',
@@ -159,8 +172,9 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
   );
   // Autenticação & Identidade Visual
   const [estaAutenticado, setEstaAutenticado] = useState<boolean>(false);
+  const [adminOriginal, setAdminOriginal] = useState<Usuario | null>(null);
   const [logoEmpresa, setLogoEmpresa] = useState<string | null>(null);
-  const [nomeEmpresa, setNomeEmpresa] = useState<string>('Comissões Pro');
+  const [nomeEmpresa, setNomeEmpresa] = useState<string>('Praxis Comissionamentos');
   const [isHydrated, setIsHydrated] = useState(false);
 
   // Restore saved data from localStorage on client mount
@@ -190,12 +204,25 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
           if (found) setUsuarioAtualState(found);
         }
 
-        // Restore Auth Session
+        // Restore Auth Session & Admin Original
         const sAuth = localStorage.getItem(STORAGE_KEYS.AUTH_STATUS);
         if (sAuth === 'true') {
           setEstaAutenticado(true);
         } else {
           setEstaAutenticado(false);
+        }
+
+        const sAdminId = localStorage.getItem(STORAGE_KEYS.ADMIN_ORIGINAL_ID);
+        if (sAdminId) {
+          const foundAdmin = loadedUsuarios.find((u) => u.id === sAdminId && u.perfil_nome === 'ADMINISTRADOR');
+          if (foundAdmin) {
+            setAdminOriginal(foundAdmin);
+          }
+        } else if (savedUserId) {
+          const found = loadedUsuarios.find((u) => u.id === savedUserId);
+          if (found && found.perfil_nome === 'ADMINISTRADOR') {
+            setAdminOriginal(found);
+          }
         }
 
         // Restore Logo & Branding
@@ -255,10 +282,26 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
                 : PARAMETROS_COMISSIONAMENTO_PADRAO.meios_pagamento_entrada_validos,
           });
           if (parsed.logo_url) {
-            setLogoEmpresa(parsed.logo_url);
+            let updatedLogo = parsed.logo_url;
+            if (updatedLogo.includes('CAPITAL%20FINANCE') || updatedLogo.includes('CAPITAL FINANCE')) {
+              updatedLogo =
+                'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" fill="none"><rect width="220" height="60" rx="10" fill="%230f172a"/><circle cx="32" cy="30" r="18" fill="%2310b981"/><path d="M22 36l7-8 6 5 9-11" stroke="%23ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="60" y="28" fill="%23ffffff" font-family="sans-serif" font-weight="900" font-size="15">PRAXIS</text><text x="60" y="44" fill="%2334d399" font-family="sans-serif" font-weight="700" font-size="9" letter-spacing="1">COMISSIONAMENTOS</text></svg>';
+              setParametros((prev) => ({ ...prev, logo_url: updatedLogo }));
+            }
+            setLogoEmpresa(updatedLogo);
           }
           if (parsed.nome_empresa) {
-            setNomeEmpresa(parsed.nome_empresa);
+            if (
+              parsed.nome_empresa === 'Capital Finance Comissões' ||
+              parsed.nome_empresa === 'Comissões Pro'
+            ) {
+              setNomeEmpresa('Praxis Comissionamentos');
+              setParametros((prev) => ({ ...prev, nome_empresa: 'Praxis Comissionamentos' }));
+            } else {
+              setNomeEmpresa(parsed.nome_empresa);
+            }
+          } else {
+            setNomeEmpresa('Praxis Comissionamentos');
           }
         }
       } catch (e) {
@@ -314,6 +357,13 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
   };
 
   const setUsuarioAtual = (usuario: Usuario) => {
+    // Se o usuário atual é admin e ainda não temos adminOriginal registrado, salva ele
+    if (!adminOriginal && usuarioAtual.perfil_nome === 'ADMINISTRADOR') {
+      setAdminOriginal(usuarioAtual);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ADMIN_ORIGINAL_ID, usuarioAtual.id);
+      } catch {}
+    }
     setUsuarioAtualState(usuario);
     try {
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, usuario.id);
@@ -357,6 +407,19 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
 
     setUsuarioAtualState(usuario);
     setEstaAutenticado(true);
+
+    if (usuario.perfil_nome === 'ADMINISTRADOR') {
+      setAdminOriginal(usuario);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ADMIN_ORIGINAL_ID, usuario.id);
+      } catch {}
+    } else {
+      setAdminOriginal(null);
+      try {
+        localStorage.removeItem(STORAGE_KEYS.ADMIN_ORIGINAL_ID);
+      } catch {}
+    }
+
     try {
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, usuario.id);
       localStorage.setItem(STORAGE_KEYS.AUTH_STATUS, 'true');
@@ -373,12 +436,71 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
 
   const logout = () => {
     setEstaAutenticado(false);
+    setAdminOriginal(null);
     try {
       localStorage.removeItem(STORAGE_KEYS.AUTH_STATUS);
+      localStorage.removeItem(STORAGE_KEYS.ADMIN_ORIGINAL_ID);
     } catch (e) {
       console.error('Falha ao remover status de auth:', e);
     }
   };
+
+  const incorporarUsuario = (usuarioId: string) => {
+    const target = usuarios.find((u) => u.id === usuarioId);
+    if (!target) {
+      return { sucesso: false, mensagem: 'Usuário não encontrado.' };
+    }
+
+    let adminRef = adminOriginal;
+    if (!adminRef && usuarioAtual.perfil_nome === 'ADMINISTRADOR') {
+      adminRef = usuarioAtual;
+      setAdminOriginal(usuarioAtual);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ADMIN_ORIGINAL_ID, usuarioAtual.id);
+      } catch {}
+    }
+
+    if (!adminRef && usuarioAtual.perfil_nome !== 'ADMINISTRADOR') {
+      return { sucesso: false, mensagem: 'Apenas administradores podem navegar entre perfis.' };
+    }
+
+    setUsuarioAtualState(target);
+    try {
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, target.id);
+    } catch {}
+
+    return {
+      sucesso: true,
+      mensagem: `Você agora está atuando no sistema como ${target.nome} (${target.perfil_nome}).`,
+    };
+  };
+
+  const voltarParaAdministrador = () => {
+    const adminDestino =
+      adminOriginal ||
+      usuarios.find((u) => u.perfil_nome === 'ADMINISTRADOR' && u.ativo) ||
+      usuarios.find((u) => u.perfil_nome === 'ADMINISTRADOR');
+
+    if (!adminDestino) {
+      return { sucesso: false, mensagem: 'Nenhum administrador encontrado para retornar.' };
+    }
+
+    setUsuarioAtualState(adminDestino);
+    setAdminOriginal(adminDestino);
+    try {
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, adminDestino.id);
+      localStorage.setItem(STORAGE_KEYS.ADMIN_ORIGINAL_ID, adminDestino.id);
+    } catch {}
+
+    return {
+      sucesso: true,
+      mensagem: `Sessão restaurada para o perfil Administrador: ${adminDestino.nome}.`,
+    };
+  };
+
+  const isImpersonating = Boolean(
+    adminOriginal && usuarioAtual && adminOriginal.id !== usuarioAtual.id
+  );
 
   const salvarLogoEmpresa = (novoLogo: string | null) => {
     setLogoEmpresa(novoLogo);
@@ -567,18 +689,37 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
   };
 
   const excluirRascunho = (vendaId: string) => {
+    const venda = vendas.find((v) => v.id === vendaId);
+    if (!venda) return { sucesso: false, mensagem: 'Venda não localizada no sistema.' };
+
     const lanc = lancamentos.find((l) => l.venda_id === vendaId);
-    if (!lanc) return { sucesso: false, mensagem: 'Lançamento não localizado.' };
-    if (lanc.status !== 'RASCUNHO' && lanc.status !== 'REJEITADO') {
+    if (lanc && lanc.status !== 'RASCUNHO' && lanc.status !== 'REJEITADO') {
       return {
         sucesso: false,
-        mensagem: 'Apenas vendas em Rascunho ou Rejeitadas podem ser excluídas.',
+        mensagem: `Não é possível excluir esta venda pois o status atual é "${lanc.status}". Apenas contratos com status Rascunho ou Rejeitado podem ser excluídos pelo vendedor.`,
       };
     }
 
+    if (usuarioAtual.perfil_nome === 'VENDEDOR' && venda.vendedor_id !== usuarioAtual.id) {
+      return {
+        sucesso: false,
+        mensagem: 'Você só pode excluir os seus próprios rascunhos de venda.',
+      };
+    }
+
+    const codIdentificador =
+      venda.codigo_venda ||
+      (venda.numero_sequencial
+        ? `#${String(venda.numero_sequencial).padStart(4, '0')}`
+        : venda.numero_documento);
+
     setVendas((prev) => prev.filter((v) => v.id !== vendaId));
     setLancamentos((prev) => prev.filter((l) => l.venda_id !== vendaId));
-    return { sucesso: true, mensagem: 'Rascunho excluído com sucesso.' };
+
+    return {
+      sucesso: true,
+      mensagem: `Rascunho da venda ${codIdentificador} (${venda.cliente_nome}) foi excluído com sucesso!`,
+    };
   };
 
   const submeterParaAprovacao = (lancamentoId: string) => {
@@ -702,10 +843,14 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
       return { sucesso: false, mensagem: 'Informe o comprovante de transação (ex: Código PIX/TED).' };
     }
 
-    const vendedor = usuarios.find((u) => u.id === dados.vendedor_id);
-    const selecionados = lancamentos.filter(
-      (l) => dados.lancamentos_ids.includes(l.id) && l.vendedor_id === dados.vendedor_id
+    const isMultiVendedor = dados.vendedor_id === 'TODOS';
+    const selecionados = lancamentos.filter((l) =>
+      dados.lancamentos_ids.includes(l.id) && (isMultiVendedor ? true : l.vendedor_id === dados.vendedor_id)
     );
+
+    if (selecionados.length === 0) {
+      return { sucesso: false, mensagem: 'Nenhum lançamento conferido selecionado para liquidação.' };
+    }
 
     // Validar se todos são CONFERIDO
     const invalidos = selecionados.filter((l) => l.status !== 'CONFERIDO');
@@ -716,6 +861,90 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
       };
     }
 
+    if (isMultiVendedor) {
+      // Agrupar por vendedor para gerar os repasses individuais de cada um
+      const vendedoresMap = new Map<string, LancamentoComissao[]>();
+      for (const item of selecionados) {
+        const list = vendedoresMap.get(item.vendedor_id) || [];
+        list.push(item);
+        vendedoresMap.set(item.vendedor_id, list);
+      }
+
+      const novosRepasses: Repasse[] = [];
+      const baseTimestamp = Date.now();
+      let idx = 0;
+      let totalGeral = 0;
+
+      for (const [vId, lancs] of vendedoresMap.entries()) {
+        const vend = usuarios.find((u) => u.id === vId);
+        const subtotal = lancs.reduce((acc, curr) => acc + curr.valor_comissao_calculado, 0);
+        totalGeral += subtotal;
+        const rId = `rep-${baseTimestamp}-${idx++}`;
+        novosRepasses.push({
+          id: rId,
+          vendedor_id: vId,
+          vendedor_nome: vend?.nome || 'Vendedor',
+          data_repasse: dados.data_repasse,
+          valor_total_repassado: Number(subtotal.toFixed(2)),
+          comprovante_transacao: dados.comprovante_transacao.trim(),
+          registrado_por: usuarioAtual.id,
+          registrado_por_nome: usuarioAtual.nome,
+          criado_em: new Date().toISOString(),
+          lancamentos_ids: lancs.map((l) => l.id),
+          observacoes: dados.observacoes?.trim() || undefined,
+        });
+      }
+
+      setRepasses((prev) => [...novosRepasses, ...prev]);
+
+      setLancamentos((prev) => {
+        const lancParaRepId = new Map<string, string>();
+        for (const rep of novosRepasses) {
+          for (const lId of rep.lancamentos_ids) {
+            lancParaRepId.set(lId, rep.id);
+          }
+        }
+
+        const atualizados = prev.map((l) => {
+          const repId = lancParaRepId.get(l.id);
+          return repId
+            ? { ...l, status: 'LIQUIDADO' as StatusLancamento, repasse_id: repId }
+            : l;
+        });
+
+        const debitosLiquidados = prev.filter(
+          (p) => dados.lancamentos_ids.includes(p.id) && p.is_debito_compensatorio && p.lancamento_estornado_origem_id
+        );
+
+        if (debitosLiquidados.length > 0) {
+          const origensIds = debitosLiquidados.map((d) => d.lancamento_estornado_origem_id);
+          return atualizados.map((l) => {
+            if (origensIds.includes(l.id) && l.historico_estorno) {
+              return {
+                ...l,
+                historico_estorno: {
+                  ...l.historico_estorno,
+                  compensado: true,
+                },
+              };
+            }
+            return l;
+          });
+        }
+
+        return atualizados;
+      });
+
+      return {
+        sucesso: true,
+        mensagem: `Lote de repasse liquidado para ${vendedoresMap.size} vendedor(es) (${selecionados.length} lançamentos), totalizando ${formatarMoedaBR(totalGeral, true)}!`,
+        repasseId: novosRepasses[0]?.id,
+        repasse: novosRepasses[0],
+        repasses: novosRepasses,
+      };
+    }
+
+    const vendedor = usuarios.find((u) => u.id === dados.vendedor_id);
     const valorTotal = selecionados.reduce((acc, curr) => acc + curr.valor_comissao_calculado, 0);
     const repasseId = `rep-${Date.now()}`;
 
@@ -735,19 +964,45 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
 
     setRepasses((prev) => [novoRepasse, ...prev]);
 
-    setLancamentos((prev) =>
-      prev.map((l) =>
+    setLancamentos((prev) => {
+      // 1. Marca os itens selecionados como LIQUIDADO e atribui o repasseId
+      const atualizados = prev.map((l) =>
         dados.lancamentos_ids.includes(l.id)
-          ? { ...l, status: 'LIQUIDADO', repasse_id: repasseId }
+          ? { ...l, status: 'LIQUIDADO' as StatusLancamento, repasse_id: repasseId }
           : l
-      )
-    );
+      );
+
+      // 2. Se algum dos itens liquidados era um débito compensatório de estorno,
+      // atualiza o histórico do lançamento original marcando-o como compensado
+      const debitosLiquidados = prev.filter(
+        (p) => dados.lancamentos_ids.includes(p.id) && p.is_debito_compensatorio && p.lancamento_estornado_origem_id
+      );
+
+      if (debitosLiquidados.length > 0) {
+        const origensIds = debitosLiquidados.map((d) => d.lancamento_estornado_origem_id);
+        return atualizados.map((l) => {
+          if (origensIds.includes(l.id) && l.historico_estorno) {
+            return {
+              ...l,
+              historico_estorno: {
+                ...l.historico_estorno,
+                compensado: true,
+              },
+            };
+          }
+          return l;
+        });
+      }
+
+      return atualizados;
+    });
 
     return {
       sucesso: true,
-      mensagem: `Repasse de R$ ${valorTotal.toFixed(2)} liquidado com sucesso para ${vendedor?.nome}!`,
+      mensagem: `Repasse de ${formatarMoedaBR(valorTotal, true)} liquidado com sucesso para ${vendedor?.nome}!`,
       repasseId,
       repasse: novoRepasse,
+      repasses: [novoRepasse],
     };
   };
 
@@ -757,6 +1012,14 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
     }
     const lanc = lancamentos.find((l) => l.id === lancamentoId);
     if (!lanc) return { sucesso: false, mensagem: 'Lançamento não localizado.' };
+
+    if (lanc.status === 'LIQUIDADO') {
+      return {
+        sucesso: false,
+        mensagem:
+          'Este lançamento já foi liquidado/pago ao vendedor. Utilize a rotina de "Estorno de Comissão Paga" para registrar a forma de compensação/débito.',
+      };
+    }
 
     setLancamentos((prev) =>
       prev.map((l) =>
@@ -769,6 +1032,10 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
                 motivo: motivo.trim(),
                 data: new Date().toISOString(),
                 por: usuarioAtual.nome,
+                tipo_estorno: 'PRE_REPASSE',
+                valor_estornado: l.valor_comissao_calculado,
+                forma_compensacao: 'DESCONTO_PROXIMO_REPASSE',
+                compensado: true,
               },
             }
           : l
@@ -777,7 +1044,113 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
 
     return {
       sucesso: true,
-      mensagem: 'Comissão estornada e cancelada com auditoria registrada.',
+      mensagem: 'Comissão cancelada e estornada com sucesso antes da liquidação financeira.',
+    };
+  };
+
+  const estornarComissaoPaga = (dados: {
+    lancamentoId: string;
+    motivo: string;
+    formaCompensacao: 'DESCONTO_PROXIMO_REPASSE' | 'DEVOLUCAO_DIRETA';
+    comprovanteDevolucao?: string;
+  }) => {
+    if (!dados.motivo || !dados.motivo.trim()) {
+      return { sucesso: false, mensagem: 'Informe obrigatoriamente a justificativa/motivo do estorno da comissão paga.' };
+    }
+
+    const lanc = lancamentos.find((l) => l.id === dados.lancamentoId);
+    if (!lanc) return { sucesso: false, mensagem: 'Lançamento de comissão não localizado.' };
+
+    if (lanc.status !== 'LIQUIDADO') {
+      return {
+        sucesso: false,
+        mensagem: `Apenas lançamentos com status LIQUIDADO (já pagos em repasse) podem ser estornados por esta rotina. O status atual deste lançamento é ${lanc.status}.`,
+      };
+    }
+
+    const venda = vendas.find((v) => v.id === lanc.venda_id);
+    const vendedor = usuarios.find((u) => u.id === lanc.vendedor_id);
+    const valorEstorno = Math.abs(lanc.valor_comissao_calculado);
+    const lancamentoAjusteId =
+      dados.formaCompensacao === 'DESCONTO_PROXIMO_REPASSE' ? `lc-debito-${Date.now()}` : null;
+
+    const dataAgora = new Date().toISOString();
+    const docDesc = venda ? `${venda.numero_documento} (${venda.cliente_nome})` : 'Documento';
+
+    const historico: HistoricoEstorno = {
+      motivo: dados.motivo.trim(),
+      data: dataAgora,
+      por: usuarioAtual.nome,
+      tipo_estorno: 'POS_LIQUIDACAO',
+      repasse_original_id: lanc.repasse_id || null,
+      valor_estornado: valorEstorno,
+      forma_compensacao: dados.formaCompensacao,
+      compensado: dados.formaCompensacao === 'DEVOLUCAO_DIRETA',
+      comprovante_devolucao:
+        dados.formaCompensacao === 'DEVOLUCAO_DIRETA'
+          ? dados.comprovanteDevolucao?.trim() || 'Devolução confirmada via Caixa/PIX'
+          : null,
+      lancamento_ajuste_id: lancamentoAjusteId,
+    };
+
+    setLancamentos((prev) => {
+      // 1. Atualizar o lançamento original para ESTORNADO
+      const atualizados = prev.map((l) =>
+        l.id === dados.lancamentoId
+          ? {
+              ...l,
+              status: 'ESTORNADO' as StatusLancamento,
+              justificativa_rejeicao: `ESTORNO PÓS-PAGAMENTO: ${dados.motivo.trim()} [Compensação: ${
+                dados.formaCompensacao === 'DESCONTO_PROXIMO_REPASSE'
+                  ? 'Débito a compensar no próximo repasse'
+                  : 'Devolução direta efetuada'
+              }]`,
+              historico_estorno: historico,
+            }
+          : l
+      );
+
+      // 2. Se for desconto no próximo repasse, cria o lançamento compensatório de débito
+      if (dados.formaCompensacao === 'DESCONTO_PROXIMO_REPASSE') {
+        const lancamentoCompensatorio: LancamentoComissao = {
+          id: lancamentoAjusteId!,
+          venda_id: lanc.venda_id,
+          vendedor_id: lanc.vendedor_id,
+          vendedor_nome: lanc.vendedor_nome || vendedor?.nome,
+          regra_aplicada_id: lanc.regra_aplicada_id,
+          valor_base_calculo: -(venda?.valor_total_venda || 0),
+          percentual_entrada_calculado: lanc.percentual_entrada_calculado,
+          entrada_valida_considerada: 0,
+          aliquota_ou_fixo_aplicado: lanc.aliquota_ou_fixo_aplicado,
+          tipo_regra_aplicada: 'VALOR_FIXO',
+          valor_comissao_calculado: -valorEstorno, // Valor negativo que abaterá do lote
+          status: 'CONFERIDO', // Já aprovado e conferido pelo Administrador para entrar no próximo lote
+          aprovado_por: usuarioAtual.id,
+          aprovado_em: dataAgora,
+          justificativa_rejeicao: `DÉBITO COMPENSATÓRIO: Estorno de comissão paga do contrato ${venda?.numero_documento || ''}`,
+          is_debito_compensatorio: true,
+          lancamento_estornado_origem_id: lanc.id,
+        };
+        return [lancamentoCompensatorio, ...atualizados];
+      }
+
+      return atualizados;
+    });
+
+    const detalheCompensacao =
+      dados.formaCompensacao === 'DESCONTO_PROXIMO_REPASSE'
+        ? `Um débito compensatório de -R$ ${valorEstorno.toFixed(
+            2
+          )} foi adicionado e será abatido automaticamente no próximo repasse de ${
+            vendedor?.nome || 'vendedor'
+          }.`
+        : `A devolução financeira direta de R$ ${valorEstorno.toFixed(
+            2
+          )} foi registrada e quitada no sistema.`;
+
+    return {
+      sucesso: true,
+      mensagem: `Comissão paga da venda ${docDesc} foi estornada com sucesso! ${detalheCompensacao}`,
     };
   };
 
@@ -810,25 +1183,34 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
 
     return {
       sucesso: true,
-      mensagem: `Regra de comissionamento salva para ${vendedor.nome} (vigência: ${regraData.vigencia_inicio} a ${regraData.vigencia_fim || 'Indeterminada'})!`,
+      mensagem: 'Regra salva com sucesso.',
       regraId,
     };
   };
 
   const excluirRegra = (regraId: string) => {
     const regra = regras.find((r) => r.id === regraId);
-    if (!regra) return { sucesso: false, mensagem: 'Regra não encontrada.' };
+    if (!regra) return { sucesso: false, mensagem: 'Regra não encontrada.', vendasAssociadas: 0 };
 
+    // Verificar se existe venda associada à regra (via lancamentos_comissao ou histórico)
     const lancamentosVinculados = lancamentos.filter((l) => l.regra_aplicada_id === regraId);
+    const vendasVinculadasIds = new Set(lancamentosVinculados.map((l) => l.venda_id));
+    const totalVendas = vendasVinculadasIds.size > 0 ? vendasVinculadasIds.size : lancamentosVinculados.length;
+
+    if (totalVendas > 0) {
+      return {
+        sucesso: false,
+        mensagem: `Não é possível a exclusão pela existência de venda associada. Esta regra possui ${totalVendas} venda(s) vinculada(s) ao seu histórico de apuração. Para desativá-la com segurança, encerre sua vigência.`,
+        vendasAssociadas: totalVendas,
+      };
+    }
+
     setRegras((prev) => prev.filter((r) => r.id !== regraId));
 
     return {
       sucesso: true,
-      mensagem: `Regra de ${regra.vendedor_nome || 'vendedor'} excluída com sucesso.${
-        lancamentosVinculados.length > 0
-          ? ` (${lancamentosVinculados.length} lançamentos históricos já calculados continuam preservados com auditoria).`
-          : ''
-      }`,
+      mensagem: `Regra de ${regra.vendedor_nome || 'vendedor'} excluída com sucesso.`,
+      vendasAssociadas: 0,
     };
   };
 
@@ -1400,6 +1782,7 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
     conferirLancamentosEmLote,
     liquidarRepasseLote,
     estornarLancamento,
+    estornarComissaoPaga,
     salvarRegra,
     excluirRegra,
     duplicarRegra,
@@ -1419,6 +1802,10 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
     estaAutenticado,
     login,
     logout,
+    adminOriginal,
+    isImpersonating,
+    incorporarUsuario,
+    voltarParaAdministrador,
     logoEmpresa,
     salvarLogoEmpresa,
     nomeEmpresa,

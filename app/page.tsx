@@ -15,10 +15,17 @@ import { ImportSalesModal } from '@/components/ImportSalesModal';
 import { SalesEntryModal } from '@/components/SalesEntryModal';
 import { LoginScreen } from '@/components/LoginScreen';
 import { Venda, ModuloSistemaId, MODULOS_SISTEMA } from '@/lib/types';
-import { ShieldAlert, ShieldCheck, Sliders, Wallet } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, Sliders, Wallet, RotateCcw } from 'lucide-react';
 
 function DashboardApp() {
-  const { usuarioAtual, temPermissao, estaAutenticado } = useCommission();
+  const {
+    usuarioAtual,
+    temPermissao,
+    estaAutenticado,
+    adminOriginal,
+    isImpersonating,
+    voltarParaAdministrador,
+  } = useCommission();
 
   // Active view tab: Default is 'dashboard' (primeiro módulo)
   const [abaAtiva, setAbaAtiva] = useState<string>('dashboard');
@@ -33,9 +40,33 @@ function DashboardApp() {
   const [isModalVendaAberta, setIsModalVendaAberta] = useState(false);
   const [vendaEmEdicao, setVendaEmEdicao] = useState<Venda | null>(null);
 
+  // Sempre que logar em um usuário ou trocar de usuário autenticado, ir direto para o Dashboard
+  const prevUsuarioIdRef = React.useRef(usuarioAtual.id);
+  const prevAutenticadoRef = React.useRef(estaAutenticado);
+
+  React.useEffect(() => {
+    // Se o usuário acabou de autenticar (login efetuado) OU se o usuário ativo mudou
+    if (!prevAutenticadoRef.current && estaAutenticado) {
+      setAbaAtiva('dashboard');
+      setSubAbaVendas('TODOS');
+    } else if (prevUsuarioIdRef.current !== usuarioAtual.id) {
+      setAbaAtiva('dashboard');
+      setSubAbaVendas('TODOS');
+    }
+    prevUsuarioIdRef.current = usuarioAtual.id;
+    prevAutenticadoRef.current = estaAutenticado;
+  }, [estaAutenticado, usuarioAtual.id]);
+
   // Se o usuário não estiver autenticado, exibe a tela de login moderna
   if (!estaAutenticado) {
-    return <LoginScreen />;
+    return (
+      <LoginScreen
+        onLoginSuccess={() => {
+          setAbaAtiva('dashboard');
+          setSubAbaVendas('TODOS');
+        }}
+      />
+    );
   }
 
   const handleAbrirNovaVenda = () => {
@@ -92,7 +123,41 @@ function DashboardApp() {
           subAbaVendas={subAbaVendas}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           onNovaVenda={handleAbrirNovaVenda}
+          onIrParaDashboard={() => {
+            setAbaAtiva('dashboard');
+            setSubAbaVendas('TODOS');
+          }}
         />
+
+        {/* Impersonation Alert Banner */}
+        {isImpersonating && adminOriginal && (
+          <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-white px-4 py-2.5 text-xs shadow-xs border-b border-amber-600 flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-white animate-ping" />
+              <span>
+                <strong>Modo Atuação de Perfil:</strong> Você está navegando e agindo como{' '}
+                <span className="font-extrabold underline decoration-white/60 underline-offset-2">
+                  {usuarioAtual.nome}
+                </span>{' '}
+                ({usuarioAtual.perfil_nome}). Todos os dados, regras e permissões refletem exatamente este usuário.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  voltarParaAdministrador();
+                  setAbaAtiva('dashboard');
+                  setSubAbaVendas('TODOS');
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-white/20 hover:bg-white text-white hover:text-amber-900 px-3 py-1 font-bold text-xs shadow-2xs backdrop-blur-xs transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Voltar para Administrador ({adminOriginal.nome})</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Viewport Content Area */}
         <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 custom-scrollbar">
@@ -146,8 +211,12 @@ function DashboardApp() {
 
                 {abaAtiva === 'repasses_admin' && <AdminRepasseBatch />}
 
-                {(abaAtiva === 'configuracoes' || abaAtiva === 'regras') && (
-                  <CommissionSettings abaInicial="usuarios" />
+                {abaAtiva === 'regras' && (
+                  <CommissionSettings abaInicial="vendedores" />
+                )}
+
+                {abaAtiva === 'configuracoes' && (
+                  <CommissionSettings abaInicial="vendedores" />
                 )}
 
                 {abaAtiva === 'usuarios' && (

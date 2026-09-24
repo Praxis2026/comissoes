@@ -9,7 +9,7 @@ import {
   Usuario,
   Venda,
 } from './types';
-import { formatarDataBR } from './utils';
+import { formatarDataBR, formatarMoedaBR } from './utils';
 import { gerarPermissoesPadrao } from './permissions';
 
 // ====================================================================
@@ -57,7 +57,7 @@ export function calcularComissao(
     const fixo = Number(regra.valor_fixo) || 0;
     return {
       sucesso: true,
-      mensagem: `Comissão fixa por venda aplicada: R$ ${fixo.toFixed(2)}`,
+      mensagem: `Comissão fixa por venda aplicada: ${formatarMoedaBR(fixo, true)}`,
       regra_id: regra.id,
       tipo_comissao: 'VALOR_FIXO',
       valor_base: valorTotal,
@@ -65,7 +65,7 @@ export function calcularComissao(
       percentual_entrada: Number(percentualEntrada.toFixed(2)),
       aliquota_ou_fixo: fixo,
       valor_comissao: fixo,
-      detalhe_faixa: `Valor Fixo Nominal por Contrato (R$ ${fixo.toFixed(2)})`,
+      detalhe_faixa: `Valor Fixo Nominal por Contrato (${formatarMoedaBR(fixo, true)})`,
     };
   }
 
@@ -109,7 +109,13 @@ export function calcularComissao(
   const comissaoResidual = Number(((valorTotal * aliquotaResidual) / 100).toFixed(2));
   return {
     sucesso: true,
-    mensagem: `Percentual de entrada (${percentualEntrada.toFixed(2)}%) abaixo das faixas mínimas cadastradas. Aplicada alíquota residual de ${aliquotaResidual.toFixed(2)}%.`,
+    mensagem: `Percentual de entrada (${percentualEntrada.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}%) abaixo das faixas mínimas cadastradas. Aplicada alíquota residual de ${aliquotaResidual.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}%.`,
     regra_id: regra.id,
     tipo_comissao: 'ESCALONADO_ENTRADA',
     valor_base: valorTotal,
@@ -117,7 +123,10 @@ export function calcularComissao(
     percentual_entrada: Number(percentualEntrada.toFixed(2)),
     aliquota_ou_fixo: aliquotaResidual,
     valor_comissao: comissaoResidual,
-    detalhe_faixa: `Faixa Residual Padrão: ${aliquotaResidual.toFixed(2)}% de comissão`,
+    detalhe_faixa: `Faixa Residual Padrão: ${aliquotaResidual.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}% de comissão`,
   };
 }
 

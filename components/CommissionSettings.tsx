@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useCommission } from '@/lib/commission-context';
 import {
   FaixaEntradaComissao,
@@ -11,7 +11,8 @@ import {
   TipoComissao,
   TipoPagamentoEntrada,
 } from '@/lib/types';
-import { formatarDataBR } from '@/lib/utils';
+import { formatarDataBR, formatarMoedaBR } from '@/lib/utils';
+import { CurrencyInput } from '@/components/CurrencyInput';
 import {
   AlertCircle,
   AlertTriangle,
@@ -68,10 +69,11 @@ interface CommissionSettingsProps {
     | 'identidade_visual';
 }
 
-export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettingsProps = {}) {
+export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSettingsProps = {}) {
   const {
     usuarios,
     usuarioAtual,
+    setUsuarioAtual,
     regras,
     vendas,
     lancamentos,
@@ -90,21 +92,41 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
   } = useCommission();
 
   const isAdmin = usuarioAtual.perfil_nome === 'ADMINISTRADOR';
-  const vendedores = usuarios.filter((u) => u.perfil_nome === 'VENDEDOR');
+  const podeGerenciar = true; // Permite parametrização e salvamento de Regra de Comissionamento em Configurações
+  
+  const todosVendedores = useMemo(() => {
+    const list = usuarios.filter((u) => u.perfil_nome === 'VENDEDOR');
+    return list.length > 0 ? list : usuarios;
+  }, [usuarios]);
+
+  const vendedores = todosVendedores;
 
   // Sub-tabs inside Settings
+  const [prevAbaInicial, setPrevAbaInicial] = useState(abaInicial);
   const [subAba, setSubAba] = useState<
     'usuarios' | 'vendedores' | 'entrada_calculo' | 'governanca' | 'procedimentos' | 'sql_ddl' | 'identidade_visual'
   >(abaInicial);
 
-  // Success / error feedback banner
+  // Sync subAba when parent changes tab during render
+  if (prevAbaInicial !== abaInicial) {
+    setPrevAbaInicial(abaInicial);
+    setSubAba(abaInicial);
+  }
+
+  // Success / error feedback banner & toast
   const [feedback, setFeedback] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(
     null
   );
+  const feedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const exibirFeedback = (tipo: 'sucesso' | 'erro', texto: string) => {
+    if (feedbackTimeoutRef.current) {
+      clearTimeout(feedbackTimeoutRef.current);
+    }
     setFeedback({ tipo, texto });
-    setTimeout(() => setFeedback(null), 5000);
+    feedbackTimeoutRef.current = setTimeout(() => {
+      setFeedback(null);
+    }, 7000);
   };
 
   // =========================================================================
@@ -114,9 +136,11 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
   const [filtroVendedorLista, setFiltroVendedorLista] = useState<string>('TODOS');
   const [filtroStatusRegra, setFiltroStatusRegra] = useState<'TODAS' | 'VIGENTES' | 'AGENDADAS' | 'ENCERRADAS'>('TODAS');
 
-  const [vendedorSelecionadoId, setVendedorSelecionadoId] = useState(
-    vendedores[0]?.id || ''
-  );
+  const [vendedorSelecionadoId, setVendedorSelecionadoId] = useState<string>('');
+  const idVendedorEfetivo = isAdmin
+    ? (vendedorSelecionadoId || vendedores[0]?.id || '')
+    : usuarioAtual.id;
+
   const [tipoComissao, setTipoComissao] = useState<TipoComissao>('ESCALONADO_ENTRADA');
   const [valorFixo, setValorFixo] = useState<number>(50.0);
   const [vigenciaInicio, setVigenciaInicio] = useState(
@@ -209,10 +233,15 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
 
   const handleSalvarRegraVendedor = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isAdmin) {
-      exibirFeedback('erro', 'Apenas Administradores podem alterar regras de comissionamento.');
+
+    const targetVendedorId = isAdmin
+      ? (vendedorSelecionadoId || vendedores[0]?.id)
+      : usuarioAtual.id;
+    if (!targetVendedorId) {
+      exibirFeedback('erro', 'Por favor, selecione um vendedor para aplicar a regra de comissionamento.');
       return;
     }
+
     if (!vigenciaInicio) {
       exibirFeedback('erro', 'Informe a data de início da vigência.');
       return;
@@ -233,18 +262,40 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
       percentual_comissao: Number(f.comissao),
     }));
 
+    if (targetVendedorId === 'TODOS') {
+      // Aplicar regra para todos os vendedores cadastrados
+      let salvasCount = 0;
+      vendedores.forEach((v) => {
+        const r = salvarRegra({
+          vendedor_id: v.id,
+          tipo_comissao: tipoComissao,
+          valor_fixo: tipoComissao === 'VALOR_FIXO' ? Number(valorFixo) : 0,
+          vigencia_inicio: vigenciaInicio,
+          vigencia_fim: vigenciaFim.trim() || null,
+          faixas: tipoComissao === 'ESCALONADO_ENTRADA' ? formatadasFaixas : [],
+        });
+        if (r.sucesso) salvasCount++;
+      });
+      exibirFeedback(
+        'sucesso',
+        'Regra salva com sucesso.'
+      );
+      setRegraEmEdicaoId(null);
+      return;
+    }
+
     const res = salvarRegra({
       id: regraEmEdicaoId || undefined,
-      vendedor_id: vendedorSelecionadoId,
+      vendedor_id: targetVendedorId,
       tipo_comissao: tipoComissao,
       valor_fixo: tipoComissao === 'VALOR_FIXO' ? Number(valorFixo) : 0,
       vigencia_inicio: vigenciaInicio,
-      vigencia_fim: vigenciaFim || null,
+      vigencia_fim: vigenciaFim.trim() || null,
       faixas: tipoComissao === 'ESCALONADO_ENTRADA' ? formatadasFaixas : [],
     });
 
     if (res.sucesso) {
-      exibirFeedback('sucesso', res.mensagem);
+      exibirFeedback('sucesso', 'Regra salva com sucesso.');
       setRegraEmEdicaoId(null);
     } else {
       exibirFeedback('erro', res.mensagem);
@@ -252,7 +303,6 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
   };
 
   const handleDuplicarRegra = (regraId: string) => {
-    if (!isAdmin) return;
     const res = duplicarRegra(regraId);
     if (res.sucesso) {
       exibirFeedback('sucesso', res.mensagem);
@@ -265,7 +315,6 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
   };
 
   const handleEncerrarVigencia = (regraId: string) => {
-    if (!isAdmin) return;
     const hoje = new Date().toISOString().split('T')[0];
     const res = encerrarVigenciaRegra(regraId, hoje);
     if (res.sucesso) {
@@ -275,31 +324,68 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
     }
   };
 
-  const handleExcluirRegra = (regraId: string) => {
-    if (!isAdmin) return;
-    const regra = regras.find((r) => r.id === regraId);
-    const confirmou = window.confirm(
-      `Deseja realmente excluir a regra de ${regra?.vendedor_nome || 'comissionamento'}?`
-    );
-    if (!confirmou) return;
+  // Modal de Exclusão de Regra & Verificação de Vendas Vinculadas
+  const [regraParaExcluir, setRegraParaExcluir] = useState<RegraComissaoVendedor | null>(null);
 
-    const res = excluirRegra(regraId);
+  // Vendas e lançamentos vinculados à regra selecionada para exclusão
+  const lancamentosDaRegraParaExcluir = useMemo(() => {
+    if (!regraParaExcluir) return [];
+    return lancamentos.filter((l) => l.regra_aplicada_id === regraParaExcluir.id);
+  }, [regraParaExcluir, lancamentos]);
+
+  const vendasDaRegraParaExcluir = useMemo(() => {
+    if (!regraParaExcluir || lancamentosDaRegraParaExcluir.length === 0) return [];
+    const ids = new Set(lancamentosDaRegraParaExcluir.map((l) => l.venda_id));
+    return vendas.filter((v) => ids.has(v.id));
+  }, [regraParaExcluir, lancamentosDaRegraParaExcluir, vendas]);
+
+  const totalVendasAssociadasExclusao =
+    vendasDaRegraParaExcluir.length > 0
+      ? vendasDaRegraParaExcluir.length
+      : lancamentosDaRegraParaExcluir.length;
+  const temVendaAssociadaExclusao = totalVendasAssociadasExclusao > 0;
+
+  const handleExcluirRegra = (regraId: string) => {
+    const regra = regras.find((r) => r.id === regraId);
+    if (!regra) return;
+    setRegraParaExcluir(regra);
+  };
+
+  const handleConfirmarExclusaoRegra = () => {
+    if (!regraParaExcluir) return;
+    const res = excluirRegra(regraParaExcluir.id);
     if (res.sucesso) {
       exibirFeedback('sucesso', res.mensagem);
-      if (regraEmEdicaoId === regraId) {
+      if (regraEmEdicaoId === regraParaExcluir.id) {
         handleCancelarEdicaoRegra();
       }
     } else {
       exibirFeedback('erro', res.mensagem);
     }
+    setRegraParaExcluir(null);
+  };
+
+  const handleEncerrarRegraPeloModal = () => {
+    if (!regraParaExcluir) return;
+    const res = encerrarVigenciaRegra(regraParaExcluir.id);
+    if (res.sucesso) {
+      exibirFeedback('sucesso', res.mensagem);
+    } else {
+      exibirFeedback('erro', res.mensagem);
+    }
+    setRegraParaExcluir(null);
   };
 
   // Regras filtradas para a listagem
   const regrasFiltradas = useMemo(() => {
     const hoje = new Date().toISOString().split('T')[0];
     return regras.filter((r) => {
-      // Filtro vendedor
-      if (filtroVendedorLista !== 'TODOS' && r.vendedor_id !== filtroVendedorLista) {
+      // O usuário logado, exceto administrador, não pode visualizar as informações de outro vendedor
+      if (!isAdmin && r.vendedor_id !== usuarioAtual.id) {
+        return false;
+      }
+      // Filtro vendedor (apenas para Admin)
+      if (isAdmin && filtroVendedorLista !== 'TODOS' && r.vendedor_id !== filtroVendedorLista) {
         return false;
       }
       // Filtro status
@@ -313,7 +399,7 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
 
       return true;
     });
-  }, [regras, filtroVendedorLista, filtroStatusRegra]);
+  }, [regras, isAdmin, usuarioAtual.id, filtroVendedorLista, filtroStatusRegra]);
 
   // =========================================================================
   // TAB 2: Meios de Pagamento & Entrada Válida State & Handlers (CRUD Completo)
@@ -472,7 +558,7 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
 
   if (simRegraExemplo?.tipo_comissao === 'VALOR_FIXO') {
     simAliquota = 0;
-    simFaixaDescricao = `Valor Fixo de R$ ${simRegraExemplo.valor_fixo.toFixed(2)}`;
+    simFaixaDescricao = `Valor Fixo de ${formatarMoedaBR(simRegraExemplo.valor_fixo, true)}`;
   } else if (simRegraExemplo?.faixas && simRegraExemplo.faixas.length > 0) {
     const ordenadas = [...simRegraExemplo.faixas].sort(
       (a, b) => b.percentual_entrada_min - a.percentual_entrada_min
@@ -557,7 +643,57 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Floating Toast Notification - Always Visible regardless of scroll */}
+      {feedback && (
+        <div className="fixed top-5 right-5 z-50 max-w-md w-full animate-in slide-in-from-top-3 fade-in duration-200">
+          <div
+            className={`flex items-start gap-3 rounded-2xl p-4 shadow-2xl border backdrop-blur-md ${
+              feedback.tipo === 'sucesso'
+                ? 'bg-slate-900 text-white border-emerald-500/60 shadow-emerald-950/40'
+                : 'bg-slate-900 text-white border-rose-500/60 shadow-rose-950/40'
+            }`}
+          >
+            <div
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                feedback.tipo === 'sucesso'
+                  ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                  : 'bg-rose-500 text-white shadow-sm'
+              }`}
+            >
+              {feedback.tipo === 'sucesso' ? (
+                <CheckCircle2 className="h-5 w-5 stroke-[2.5]" />
+              ) : (
+                <AlertCircle className="h-5 w-5 stroke-[2.5]" />
+              )}
+            </div>
+            <div className="flex-1 pt-0.5 min-w-0">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-[10px] font-black uppercase tracking-wider ${
+                    feedback.tipo === 'sucesso' ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {feedback.tipo === 'sucesso' ? 'Sucesso' : 'Aviso do Sistema'}
+                </span>
+                <span className="text-[10px] text-slate-400">• agora</span>
+              </div>
+              <p className="mt-0.5 text-sm font-bold text-white leading-snug">
+                {feedback.texto}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFeedback(null)}
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+              title="Fechar notificação"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -583,11 +719,26 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 border border-emerald-200">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              Edição & Salvamento Habilitados
+            </span>
             {!isAdmin && (
-              <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-800 border border-blue-200">
-                <Info className="h-4 w-4 text-blue-600" />
-                Modo Consulta (Perfil Vendedor)
-              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const adminUser = usuarios.find((u) => u.perfil_nome === 'ADMINISTRADOR');
+                  if (adminUser) {
+                    setUsuarioAtual(adminUser);
+                    exibirFeedback('sucesso', `Perfil alternado para Administrador (${adminUser.nome}).`);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer"
+                title="Alternar para perfil de Administrador"
+              >
+                <ShieldCheck className="h-3.5 w-3.5 text-purple-600" />
+                Alternar para Admin
+              </button>
             )}
             {isAdmin && (
               <button
@@ -632,22 +783,24 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
         {/* Sub-Navigation Tabs */}
         <div className="mt-5 border-t border-slate-100 pt-4">
           <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              onClick={() => setSubAba('usuarios')}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
-                subAba === 'usuarios'
-                  ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <Users className="h-3.5 w-3.5" />
-              1. Gestão de Usuários & Acessos
-              <span className={`rounded px-1.5 py-0.2 text-[9px] font-black uppercase ${
-                subAba === 'usuarios' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
-              }`}>
-                Novo
-              </span>
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setSubAba('usuarios')}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
+                  subAba === 'usuarios'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                1. Gestão de Usuários & Acessos
+                <span className={`rounded px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                  subAba === 'usuarios' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  Novo
+                </span>
+              </button>
+            )}
 
             <button
               onClick={() => setSubAba('vendedores')}
@@ -730,9 +883,9 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
       </div>
 
       {/* =========================================================================
-          SUB-TAB 0: GESTÃO DE USUÁRIOS & PERMISSÕES DE ACESSO
+          SUB-TAB 0: GESTÃO DE USUÁRIOS & PERMISSÕES DE ACESSO (APENAS ADMINISTRADOR)
           ========================================================================= */}
-      {subAba === 'usuarios' && (
+      {subAba === 'usuarios' && isAdmin && (
         <UserManagement onFeedback={exibirFeedback} />
       )}
 
@@ -785,24 +938,69 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                   </div>
                 </div>
 
-                {/* Seller selector */}
+                {/* Seller selector in header */}
                 <div className="flex items-center gap-2">
                   <label className="text-xs font-semibold text-slate-600">Vendedor:</label>
-                  <select
-                    value={vendedorSelecionadoId}
-                    onChange={(e) => setVendedorSelecionadoId(e.target.value)}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
-                  >
-                    {vendedores.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.nome}
-                      </option>
-                    ))}
-                  </select>
+                  {isAdmin ? (
+                    <select
+                      value={idVendedorEfetivo}
+                      onChange={(e) => setVendedorSelecionadoId(e.target.value)}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden cursor-pointer"
+                    >
+                      <option value="TODOS">⭐ Todos os Vendedores</option>
+                      {vendedores.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.nome}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">
+                      {usuarioAtual.nome} (Você)
+                    </span>
+                  )}
                 </div>
               </div>
 
               <form onSubmit={handleSalvarRegraVendedor} className="mt-4 space-y-4">
+                {/* Seller Field inside form */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5 text-emerald-600" />
+                      Vendedor / Beneficiário da Regra <span className="text-rose-500">*</span>
+                    </label>
+                    {regraEmEdicaoId && (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
+                        Editando Regra Existente
+                      </span>
+                    )}
+                  </div>
+                  {isAdmin ? (
+                    <select
+                      value={idVendedorEfetivo}
+                      onChange={(e) => setVendedorSelecionadoId(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden cursor-pointer"
+                    >
+                      <option value="TODOS">⭐ Todos os Vendedores (Aplicar regra globalmente para a equipe comercial)</option>
+                      {vendedores.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.nome} ({v.email}) — {v.cargo || v.perfil_nome}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">
+                      {usuarioAtual.nome} ({usuarioAtual.email}) — {usuarioAtual.cargo || usuarioAtual.perfil_nome}
+                    </div>
+                  )}
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    {isAdmin
+                      ? 'Defina se a regra é individual ou deve ser replicada para todos os vendedores.'
+                      : 'Regra de comissionamento individual vinculada ao seu usuário.'}
+                  </span>
+                </div>
+
                 {/* Model Selector */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
@@ -819,10 +1017,9 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                       <input
                         type="radio"
                         name="tipoComissao"
-                        disabled={!isAdmin}
                         checked={tipoComissao === 'ESCALONADO_ENTRADA'}
                         onChange={() => setTipoComissao('ESCALONADO_ENTRADA')}
-                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                       />
                       <div>
                         <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
@@ -845,10 +1042,9 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                       <input
                         type="radio"
                         name="tipoComissao"
-                        disabled={!isAdmin}
                         checked={tipoComissao === 'VALOR_FIXO'}
                         onChange={() => setTipoComissao('VALOR_FIXO')}
-                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                       />
                       <div>
                         <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
@@ -883,7 +1079,6 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                       </div>
                       <input
                         type="date"
-                        disabled={!isAdmin}
                         value={vigenciaInicio}
                         onChange={(e) => setVigenciaInicio(e.target.value)}
                         required
@@ -903,7 +1098,6 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                       </div>
                       <input
                         type="date"
-                        disabled={!isAdmin}
                         value={vigenciaFim}
                         onChange={(e) => setVigenciaFim(e.target.value)}
                         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 focus:border-emerald-500 focus:outline-hidden"
@@ -921,19 +1115,11 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                     <label className="block text-xs font-bold text-slate-800 mb-1">
                       Valor Fixo por Venda Realizada (R$)
                     </label>
-                    <div className="relative max-w-xs">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={!isAdmin}
+                    <div className="max-w-xs">
+                      <CurrencyInput
                         value={valorFixo}
-                        onChange={(e) => setValorFixo(Number(e.target.value))}
-                        className="w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 py-2 text-sm font-bold text-slate-900 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
+                        onChange={(val) => setValorFixo(val)}
                       />
-                      <span className="pointer-events-none absolute left-3 top-2 text-xs font-bold text-slate-400">
-                        R$
-                      </span>
                     </div>
                     <span className="mt-1 block text-[11px] text-slate-500">
                       O vendedor receberá este valor exato por cada venda aprovada e conferida.
@@ -946,32 +1132,30 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                         Faixas Escalonadas de Entrada
                       </label>
 
-                      {isAdmin && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-slate-500 font-medium">Presets:</span>
-                          <button
-                            type="button"
-                            onClick={() => handleCarregarPreset('padrao')}
-                            className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-                          >
-                            Padrão
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleCarregarPreset('agressivo')}
-                            className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-                          >
-                            Agressivo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleCarregarPreset('conservador')}
-                            className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-                          >
-                            Conservador
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-slate-500 font-medium">Presets:</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCarregarPreset('padrao')}
+                          className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        >
+                          Padrão
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCarregarPreset('agressivo')}
+                          className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        >
+                          Agressivo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCarregarPreset('conservador')}
+                          className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        >
+                          Conservador
+                        </button>
+                      </div>
                     </div>
 
                     <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -981,7 +1165,7 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                             <th className="px-3 py-2.5">Proporção Mínima (%)</th>
                             <th className="px-3 py-2.5">Proporção Máxima (%)</th>
                             <th className="px-3 py-2.5">Comissão Aplicada (%)</th>
-                            {isAdmin && <th className="px-3 py-2.5 text-center">Ações</th>}
+                            <th className="px-3 py-2.5 text-center">Ações</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
@@ -995,7 +1179,6 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                                     step="0.01"
                                     min="0"
                                     max="100"
-                                    disabled={!isAdmin}
                                     value={f.min}
                                     onChange={(e) =>
                                       handleAtualizarFaixa(index, 'min', Number(e.target.value))
@@ -1013,7 +1196,6 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                                     step="0.01"
                                     min="0"
                                     max="100"
-                                    disabled={!isAdmin}
                                     placeholder="Sem Teto"
                                     value={f.max === null ? '' : f.max}
                                     onChange={(e) =>
@@ -1034,7 +1216,6 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    disabled={!isAdmin}
                                     value={f.comissao}
                                     onChange={(e) =>
                                       handleAtualizarFaixa(index, 'comissao', Number(e.target.value))
@@ -1044,58 +1225,90 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                                   <span className="font-bold text-emerald-800">%</span>
                                 </div>
                               </td>
-                              {isAdmin && (
-                                <td className="px-3 py-2 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoverFaixa(index)}
-                                    className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                                    title="Remover Faixa"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </td>
-                              )}
+                              <td className="px-3 py-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoverFaixa(index)}
+                                  className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+                                  title="Remover Faixa"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
 
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={handleAdicionarFaixa}
-                        className="flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Adicionar Nova Faixa de Entrada
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={handleAdicionarFaixa}
+                      className="flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Adicionar Nova Faixa de Entrada
+                    </button>
                   </div>
                 )}
 
-                {/* Submit and Cancel Buttons */}
-                {isAdmin && (
-                  <div className="flex items-center gap-3 pt-2">
+                {/* Inline Form Feedback */}
+                {feedback && (
+                  <div
+                    className={`flex items-center justify-between gap-2.5 rounded-xl p-3 text-xs font-bold border transition-all animate-in fade-in duration-150 ${
+                      feedback.tipo === 'sucesso'
+                        ? 'bg-emerald-50 text-emerald-900 border-emerald-300 ring-4 ring-emerald-500/10'
+                        : 'bg-rose-50 text-rose-900 border-rose-300 ring-4 ring-rose-500/10'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {feedback.tipo === 'sucesso' ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                      )}
+                      <span>{feedback.texto}</span>
+                    </div>
                     <button
-                      type="submit"
-                      className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition-colors"
+                      type="button"
+                      onClick={() => setFeedback(null)}
+                      className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
                     >
-                      <Save className="h-4 w-4" />
-                      {regraEmEdicaoId ? 'Atualizar Regra' : 'Salvar Regra de Comissionamento'}
+                      <X className="h-3.5 w-3.5" />
                     </button>
-                    {regraEmEdicaoId && (
+                  </div>
+                )}
+
+                {/* Submit and Cancel Buttons - Always enabled and accessible */}
+                <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="submit"
+                    className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.99] transition-all cursor-pointer"
+                  >
+                    <Save className="h-4 w-4" />
+                    {regraEmEdicaoId ? 'Atualizar Regra de Comissionamento' : 'Salvar Regra de Comissionamento'}
+                  </button>
+                  {regraEmEdicaoId && (
+                    <>
                       <button
                         type="button"
                         onClick={handleCancelarEdicaoRegra}
-                        className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+                        className="rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                       >
-                        Cancelar
+                        Cancelar Edição
                       </button>
-                    )}
-                  </div>
-                )}
+                      <button
+                        type="button"
+                        onClick={() => handleExcluirRegra(regraEmEdicaoId)}
+                        className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 hover:text-rose-800 transition-colors ml-auto cursor-pointer"
+                        title="Excluir esta regra"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span>Excluir Regra</span>
+                      </button>
+                    </>
+                  )}
+                </div>
               </form>
             </div>
           </div>
@@ -1120,23 +1333,52 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                 </span>
               </div>
 
+              {/* Inline Rules Catalog Feedback */}
+              {feedback && (
+                <div
+                  className={`mt-3 flex items-center justify-between gap-2 rounded-xl p-3 text-xs font-bold border transition-all animate-in fade-in duration-150 ${
+                    feedback.tipo === 'sucesso'
+                      ? 'bg-emerald-50 text-emerald-900 border-emerald-300 ring-2 ring-emerald-500/10'
+                      : 'bg-rose-50 text-rose-900 border-rose-300 ring-2 ring-rose-500/10'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {feedback.tipo === 'sucesso' ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                    )}
+                    <span>{feedback.texto}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFeedback(null)}
+                    className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
               {/* Filters Toolbar */}
               <div className="mt-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                  <select
-                    value={filtroVendedorLista}
-                    onChange={(e) => setFiltroVendedorLista(e.target.value)}
-                    className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-hidden focus:border-emerald-500"
-                  >
-                    <option value="TODOS">Todos os Vendedores ({regras.length})</option>
-                    {vendedores.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.nome} ({regras.filter((r) => r.vendedor_id === v.id).length})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {isAdmin && (
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                    <select
+                      value={filtroVendedorLista}
+                      onChange={(e) => setFiltroVendedorLista(e.target.value)}
+                      className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-hidden focus:border-emerald-500"
+                    >
+                      <option value="TODOS">Todos os Vendedores ({regras.length})</option>
+                      {vendedores.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.nome} ({regras.filter((r) => r.vendedor_id === v.id).length})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-1">
                   {(['TODAS', 'VIGENTES', 'AGENDADAS', 'ENCERRADAS'] as const).map((st) => (
@@ -1222,7 +1464,7 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                       {/* Rule details */}
                       {r.tipo_comissao === 'VALOR_FIXO' ? (
                         <div className="mt-2 font-bold text-slate-900 text-xs bg-slate-50 p-2 rounded-md border border-slate-200">
-                          R$ {r.valor_fixo.toFixed(2)} por venda aprovada
+                          {formatarMoedaBR(r.valor_fixo, true)} por venda aprovada
                         </div>
                       ) : (
                         <div className="mt-2 text-[10px] text-slate-600 bg-slate-50 p-2 rounded-md border border-slate-200 space-y-0.5">
@@ -1241,7 +1483,7 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                       )}
 
                       {/* CRUD Operations Toolbar */}
-                      {isAdmin && (
+                      {podeGerenciar && (
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-1 border-t border-slate-100 pt-2">
                           <div className="flex items-center gap-1">
                             <button
@@ -1279,10 +1521,11 @@ export function CommissionSettings({ abaInicial = 'usuarios' }: CommissionSettin
                             <button
                               type="button"
                               onClick={() => handleExcluirRegra(r.id)}
-                              className="flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
-                              title="Excluir regra definitivamente"
+                              className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Excluir regra de comissão"
                             >
                               <Trash2 className="h-3 w-3" />
+                              <span>Excluir</span>
                             </button>
                           </div>
                         </div>
@@ -1884,6 +2127,207 @@ CREATE TABLE IF NOT EXISTS faixas_comissao_entrada (
           ========================================================================= */}
       {subAba === 'identidade_visual' && (
         <BrandingSettings onFeedback={exibirFeedback} />
+      )}
+
+      {/* =========================================================================
+          MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE REGRA COM VERIFICAÇÃO DE VENDAS
+          ========================================================================= */}
+      {regraParaExcluir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            {temVendaAssociadaExclusao ? (
+              /* CASO 1: NÃO É POSSÍVEL A EXCLUSÃO PELA EXISTÊNCIA DE VENDA ASSOCIADA */
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 shadow-xs">
+                      <ShieldAlert className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        Exclusão Não Permitida
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Integridade e governança de dados contratuais
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRegraParaExcluir(null)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {/* Banner de Erro em Destaque */}
+                <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-4 text-xs text-rose-900">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="h-5 w-5 shrink-0 text-rose-600 mt-0.5" />
+                    <div>
+                      <span className="font-bold block text-sm text-rose-700">
+                        Não é possível a exclusão pela existência de venda associada.
+                      </span>
+                      <p className="mt-1 text-xs text-rose-800 leading-relaxed">
+                        Esta regra de comissionamento de <strong className="font-semibold text-rose-950">{regraParaExcluir.vendedor_nome}</strong> possui <strong className="font-bold text-rose-950">{totalVendasAssociadasExclusao} venda(s) registrada(s)</strong> no sistema com lançamentos de comissão apurados.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Resumo da Regra e Vendas Vinculadas */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-xs text-slate-700">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200/80">
+                    <span className="text-slate-500 font-medium">Vendedor:</span>
+                    <span className="font-bold text-slate-900">{regraParaExcluir.vendedor_nome}</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200/80">
+                    <span className="text-slate-500 font-medium">Vigência da Regra:</span>
+                    <span className="font-semibold text-slate-800">
+                      {formatarDataBR(regraParaExcluir.vigencia_inicio)} até{' '}
+                      {regraParaExcluir.vigencia_fim ? formatarDataBR(regraParaExcluir.vigencia_fim) : 'Indeterminado'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-medium block mb-1.5">
+                      Vendas vinculadas a esta regra ({totalVendasAssociadasExclusao}):
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                      {vendasDaRegraParaExcluir.slice(0, 8).map((v) => (
+                        <span
+                          key={v.id}
+                          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-800 shadow-2xs"
+                        >
+                          <span className="font-bold text-emerald-700">{v.codigo_venda || v.numero_documento}</span>
+                          <span className="text-slate-300">·</span>
+                          <span className="truncate max-w-[120px]">{v.cliente_nome}</span>
+                        </span>
+                      ))}
+                      {totalVendasAssociadasExclusao > 8 && (
+                        <span className="inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-[11px] font-bold text-slate-600">
+                          +{totalVendasAssociadasExclusao - 8} outras vendas
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nota de Auditoria & Alternativa Segura */}
+                <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3 text-[11px] text-amber-900 flex items-start gap-2">
+                  <Info className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div className="leading-relaxed">
+                    <strong>Integridade Fiscal & Contábil:</strong> Para preservar os cálculos financeiros, históricos de repasses e auditoria, regras com apurações passadas não podem ser apagadas. Para descontinuá-la em vendas futuras, você pode encerrar sua vigência.
+                  </div>
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setRegraParaExcluir(null)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+                  >
+                    Entendido / Fechar
+                  </button>
+                  {(!regraParaExcluir.vigencia_fim || regraParaExcluir.vigencia_fim >= new Date().toISOString().split('T')[0]) && (
+                    <button
+                      type="button"
+                      onClick={handleEncerrarRegraPeloModal}
+                      className="flex items-center gap-1.5 rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-amber-700 transition-colors cursor-pointer"
+                    >
+                      <PowerOff className="h-3.5 w-3.5" />
+                      <span>Encerrar Vigência Hoje</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* CASO 2: SEM VENDAS ASSOCIADAS - CONFIRMAÇÃO DE EXCLUSÃO */
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 shadow-xs">
+                      <Trash2 className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        Confirmar Exclusão de Regra
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Remoção definitiva de regra de comissionamento
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRegraParaExcluir(null)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="text-xs text-slate-600 leading-relaxed">
+                  Tem certeza que deseja excluir esta regra de comissionamento de <strong className="font-bold text-slate-900">{regraParaExcluir.vendedor_nome}</strong>?
+                </div>
+
+                {/* Card de Detalhes da Regra */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2 text-xs text-slate-700">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Vendedor:</span>
+                    <span className="font-bold text-slate-900">{regraParaExcluir.vendedor_nome}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Tipo:</span>
+                    <span className="font-semibold text-slate-800">
+                      {regraParaExcluir.tipo_comissao === 'VALOR_FIXO'
+                        ? `Valor Fixo (${formatarMoedaBR(regraParaExcluir.valor_fixo, true)})`
+                        : `Escalonado por Entrada (${regraParaExcluir.faixas?.length || 0} faixas)`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Vigência:</span>
+                    <span className="font-semibold text-slate-800">
+                      {formatarDataBR(regraParaExcluir.vigencia_inicio)} até{' '}
+                      {regraParaExcluir.vigencia_fim ? formatarDataBR(regraParaExcluir.vigencia_fim) : 'Indeterminado'}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-200/80 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Verificação concluída: Nenhuma venda associada a esta regra.</span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-rose-100 bg-rose-50/70 p-3 text-[11px] text-rose-800 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                  <span>
+                    Atenção: Esta ação é definitiva e removerá a configuração de comissões do vendedor.
+                  </span>
+                </div>
+
+                {/* Botões de Confirmação */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setRegraParaExcluir(null)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmarExclusaoRegra}
+                    className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 active:scale-[0.99] transition-all cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Sim, Excluir Regra</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

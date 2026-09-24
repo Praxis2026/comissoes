@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useCommission } from '@/lib/commission-context';
 import { StatusLancamento, Venda, LancamentoComissao } from '@/lib/types';
-import { formatarDataBR } from '@/lib/utils';
+import { formatarDataBR, formatarMoedaBR } from '@/lib/utils';
 import {
   AlertCircle,
   AlertTriangle,
@@ -85,20 +85,26 @@ export function DashboardView({
     ? obterRegraVigente(alvoVendedorId, hoje)
     : undefined;
 
-  // Filtered sales and commission entries
+  // Filtered sales and commission entries - non-admins strictly isolated to their own records
   const vendasFiltradas = useMemo(() => {
+    if (!isAdmin) {
+      return vendas.filter((v) => v.vendedor_id === usuarioAtual.id);
+    }
     if (alvoVendedorId) {
       return vendas.filter((v) => v.vendedor_id === alvoVendedorId);
     }
     return vendas;
-  }, [vendas, alvoVendedorId]);
+  }, [vendas, alvoVendedorId, isAdmin, usuarioAtual.id]);
 
   const lancamentosFiltrados = useMemo(() => {
+    if (!isAdmin) {
+      return lancamentos.filter((l) => l.vendedor_id === usuarioAtual.id);
+    }
     if (alvoVendedorId) {
       return lancamentos.filter((l) => l.vendedor_id === alvoVendedorId);
     }
     return lancamentos;
-  }, [lancamentos, alvoVendedorId]);
+  }, [lancamentos, alvoVendedorId, isAdmin, usuarioAtual.id]);
 
   // Combined Venda + Lancamento
   const vendasComLancamento = useMemo(() => {
@@ -204,9 +210,10 @@ export function DashboardView({
   }, [vendasFiltradas, lancamentosFiltrados]);
 
   // =========================================================================
-  // ADMIN GROUPING: DADOS AGRUPADOS POR VENDEDOR
+  // ADMIN GROUPING: DADOS AGRUPADOS POR VENDEDOR (APENAS ADMINISTRADOR)
   // =========================================================================
   const relatorioAgrupadoVendedores = useMemo(() => {
+    if (!isAdmin) return [];
     return vendedores.map((vend) => {
       const vendasVend = vendas.filter((v) => v.vendedor_id === vend.id);
       const lancsVend = lancamentos.filter((l) => l.vendedor_id === vend.id);
@@ -246,7 +253,7 @@ export function DashboardView({
         ticketMedio: vendasVend.length > 0 ? totalVolume / vendasVend.length : 0,
       };
     });
-  }, [vendedores, vendas, lancamentos, obterRegraVigente, hoje]);
+  }, [isAdmin, vendedores, vendas, lancamentos, obterRegraVigente, hoje]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -445,8 +452,11 @@ export function DashboardView({
             <div className="mt-2 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-2">
               <span className="text-slate-600">
                 {metricas.totalVolume > 0
-                  ? ((metricas.comissaoTotal / metricas.totalVolume) * 100).toFixed(2)
-                  : '0.00'}
+                  ? ((metricas.comissaoTotal / metricas.totalVolume) * 100).toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
+                  : '0,00'}
                 % da receita bruta
               </span>
               <span className="font-semibold text-blue-700">
@@ -851,7 +861,7 @@ export function DashboardView({
               <thead className="bg-slate-50 text-[11px] font-bold uppercase text-slate-600 border-b border-slate-200">
                 <tr>
                   <th className="px-3 py-2.5">Documento / Data</th>
-                  <th className="px-3 py-2.5">Cliente / Vendedor</th>
+                  <th className="px-3 py-2.5">{isAdmin ? 'Cliente / Vendedor' : 'Cliente'}</th>
                   <th className="px-3 py-2.5 text-right">Valor Venda</th>
                   <th className="px-3 py-2.5 text-right">Entrada (%)</th>
                   <th className="px-3 py-2.5 text-right">Comissão</th>
@@ -983,7 +993,7 @@ export function DashboardView({
                     <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-center">
                       <div className="text-xs text-blue-700 font-semibold">Valor por Venda:</div>
                       <div className="text-xl font-black text-blue-900 mt-0.5">
-                        R$ {regraVendedorAlvo.valor_fixo.toFixed(2)}
+                        {formatarMoedaBR(regraVendedorAlvo.valor_fixo, true)}
                       </div>
                       <div className="text-[10px] text-blue-600 mt-1">
                         Pago independente da entrada do cliente

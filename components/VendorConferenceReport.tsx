@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCommission } from '@/lib/commission-context';
 import { StatusLancamento } from '@/lib/types';
-import { formatarDataBR } from '@/lib/utils';
+import { formatarDataBR, formatarMoedaBR } from '@/lib/utils';
 import {
   Calendar,
   Check,
@@ -21,6 +21,7 @@ import {
 
 export function VendorConferenceReport() {
   const {
+    usuarios,
     usuarioAtual,
     vendas,
     lancamentos,
@@ -39,13 +40,20 @@ export function VendorConferenceReport() {
   const [buscaDoc, setBuscaDoc] = useState('');
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
+  const [vendedorFiltroId, setVendedorFiltroId] = useState<string>('TODOS');
+
+  const vendedores = useMemo(
+    () => usuarios.filter((u) => u.perfil_nome === 'VENDEDOR'),
+    [usuarios]
+  );
 
   // Filtrar lançamentos aplicáveis à conferência
   // De acordo com requisito 5.1: foco em APROVADO e CONFERIDO (comissões auditadas)
   const itensConferencia = lancamentos
     .filter((l) => {
-      // Vendedor vê apenas os seus; Admin pode ver todos ou filtrar
+      // Vendedor vê estritamente apenas os seus; Admin pode ver todos ou filtrar
       if (!isAdmin && l.vendedor_id !== usuarioAtual.id) return false;
+      if (isAdmin && vendedorFiltroId !== 'TODOS' && l.vendedor_id !== vendedorFiltroId) return false;
       // Relevantes para a esteira de conferência e repasse
       return ['APROVADO', 'CONFERIDO', 'LIQUIDADO'].includes(l.status);
     })
@@ -272,6 +280,23 @@ export function VendorConferenceReport() {
 
         {/* Date and Search Row */}
         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 text-xs">
+          {isAdmin && (
+            <div className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs">
+              <span className="font-semibold text-slate-500 text-[11px]">Vendedor:</span>
+              <select
+                value={vendedorFiltroId}
+                onChange={(e) => setVendedorFiltroId(e.target.value)}
+                className="bg-transparent font-bold text-slate-800 text-xs focus:outline-hidden cursor-pointer"
+              >
+                <option value="TODOS">⭐ Todos os Vendedores</option>
+                {vendedores.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-600 flex items-center gap-1">
               <Calendar className="h-3.5 w-3.5" />
@@ -333,6 +358,7 @@ export function VendorConferenceReport() {
                 </th>
                 <th className="px-4 py-3">Data</th>
                 <th className="px-4 py-3">Nº Venda / Doc</th>
+                {isAdmin && <th className="px-4 py-3">Vendedor</th>}
                 <th className="px-4 py-3 text-right">Valor Venda</th>
                 <th className="px-4 py-3 text-right">Valor Entrada</th>
                 <th className="px-4 py-3 text-center">% Entrada</th>
@@ -346,7 +372,7 @@ export function VendorConferenceReport() {
             <tbody className="divide-y divide-slate-100">
               {itensConferencia.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-10 text-center text-xs text-slate-500">
+                  <td colSpan={isAdmin ? 12 : 11} className="py-10 text-center text-xs text-slate-500">
                     Nenhum lançamento elegível para conferência localizado no período selecionado.
                   </td>
                 </tr>
@@ -397,6 +423,11 @@ export function VendorConferenceReport() {
                           </span>
                         )}
                       </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-semibold text-[11px]">
+                          {venda.vendedor_nome}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-right font-bold text-slate-900 whitespace-nowrap">
                         R$ {venda.valor_total_venda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
@@ -404,7 +435,10 @@ export function VendorConferenceReport() {
                         R$ {venda.valor_entrada_valida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-4 py-3 text-center whitespace-nowrap font-bold text-slate-800">
-                        {lancamento.percentual_entrada_calculado.toFixed(2)}%
+                        {lancamento.percentual_entrada_calculado.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}%
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">
@@ -413,8 +447,11 @@ export function VendorConferenceReport() {
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap font-semibold text-slate-800">
                         {lancamento.tipo_regra_aplicada === 'VALOR_FIXO'
-                          ? `R$ ${lancamento.aliquota_ou_fixo_aplicado.toFixed(2)}`
-                          : `${lancamento.aliquota_ou_fixo_aplicado.toFixed(2)}%`}
+                          ? formatarMoedaBR(lancamento.aliquota_ou_fixo_aplicado, true)
+                          : `${lancamento.aliquota_ou_fixo_aplicado.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}%`}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap font-black text-emerald-700">
                         R$ {lancamento.valor_comissao_calculado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}

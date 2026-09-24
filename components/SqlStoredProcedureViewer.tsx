@@ -10,6 +10,8 @@ import {
 } from '@/lib/sql-scripts';
 import { calcularComissao } from '@/lib/commission-engine';
 import { MEIOS_ENTRADA_VALIDOS, TipoPagamentoEntrada } from '@/lib/types';
+import { formatarMoedaBR } from '@/lib/utils';
+import { CurrencyInput } from '@/components/CurrencyInput';
 import {
   Check,
   CheckCircle2,
@@ -77,21 +79,27 @@ export function SqlStoredProcedureViewer() {
       trace: {
         procedimento: 'sp_calcular_comissao_venda(p_venda_id UUID)',
         v_vendedor_id: simVendedorId,
-        v_valor_total_venda: `R$ ${simValorTotal.toFixed(2)}`,
+        v_valor_total_venda: formatarMoedaBR(simValorTotal, true),
         v_tipo_pagamento_entrada: simMeioEntrada,
-        v_entrada_bruta_informada: `R$ ${simValorEntrada.toFixed(2)}`,
-        v_entrada_valida_considerada: `R$ ${res.entrada_valida.toFixed(2)} (${
+        v_entrada_bruta_informada: formatarMoedaBR(simValorEntrada, true),
+        v_entrada_valida_considerada: `${formatarMoedaBR(res.entrada_valida, true)} (${
           MEIOS_ENTRADA_VALIDOS.includes(simMeioEntrada)
             ? 'Meio válido: mantido integralmente'
             : 'Meio não aceito: zerado'
         })`,
-        v_percentual_entrada_calculado: `${res.percentual_entrada.toFixed(2)}%`,
+        v_percentual_entrada_calculado: `${res.percentual_entrada.toLocaleString('pt-BR', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}%`,
         v_regra_encontrada: `${regra.id} (${regra.tipo_comissao})`,
         v_aliquota_ou_fixo:
           res.tipo_comissao === 'VALOR_FIXO'
-            ? `R$ ${res.aliquota_ou_fixo.toFixed(2)}`
-            : `${res.aliquota_ou_fixo.toFixed(2)}%`,
-        v_valor_comissao: `R$ ${res.valor_comissao.toFixed(2)}`,
+            ? formatarMoedaBR(res.aliquota_ou_fixo, true)
+            : `${res.aliquota_ou_fixo.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}%`,
+        v_valor_comissao: formatarMoedaBR(res.valor_comissao, true),
         v_novo_status: 'RASCUNHO ou PENDENTE_APROVACAO',
         v_auditoria_detalhe: res.mensagem,
       },
@@ -170,11 +178,10 @@ export function SqlStoredProcedureViewer() {
 
           <div>
             <label className="block font-semibold text-slate-700 mb-1">Valor Venda (R$)</label>
-            <input
-              type="number"
+            <CurrencyInput
               value={simValorTotal}
-              onChange={(e) => setSimValorTotal(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-900"
+              onChange={(val) => setSimValorTotal(val)}
+              className="py-1.5"
             />
           </div>
 
@@ -197,11 +204,10 @@ export function SqlStoredProcedureViewer() {
 
           <div>
             <label className="block font-semibold text-slate-700 mb-1">Entrada Bruta (R$)</label>
-            <input
-              type="number"
+            <CurrencyInput
               value={simValorEntrada}
-              onChange={(e) => setSimValorEntrada(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-900"
+              onChange={(val) => setSimValorEntrada(val)}
+              className="py-1.5"
             />
           </div>
 

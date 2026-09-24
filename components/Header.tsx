@@ -22,6 +22,7 @@ import {
   Users,
   Wallet,
   LogOut,
+  RotateCcw,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -29,6 +30,7 @@ interface HeaderProps {
   subAbaVendas?: string;
   onOpenMobileSidebar: () => void;
   onNovaVenda: () => void;
+  onIrParaDashboard?: () => void;
 }
 
 export function Header({
@@ -36,11 +38,15 @@ export function Header({
   subAbaVendas = 'TODOS',
   onOpenMobileSidebar,
   onNovaVenda,
+  onIrParaDashboard,
 }: HeaderProps) {
   const {
     usuarioAtual,
     usuarios,
     setUsuarioAtual,
+    adminOriginal,
+    isImpersonating,
+    voltarParaAdministrador,
     lancamentos,
     temPermissao,
     logoEmpresa,
@@ -48,6 +54,7 @@ export function Header({
     logout,
   } = useCommission();
   const isAdmin = usuarioAtual.perfil_nome === 'ADMINISTRADOR';
+  const podeAlternarPerfil = isAdmin || adminOriginal !== null;
   const podeInserirVenda = temPermissao('minhas_vendas', 'inserir');
 
   const nomesSubmenus: Record<string, string> = {
@@ -157,7 +164,7 @@ export function Header({
             </div>
           ) : (
             <span className="font-semibold text-slate-400 hidden sm:inline">
-              {nomeEmpresa || 'Comissões Pro'}
+              {nomeEmpresa || 'Praxis Comissionamentos'}
             </span>
           )}
           <ChevronRight className="h-3.5 w-3.5 text-slate-300 hidden sm:inline" />
@@ -184,36 +191,82 @@ export function Header({
           <span>PostgreSQL Relacional</span>
         </div>
 
-        {/* User Switcher Dropdown */}
-        <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs">
-          <span className="text-[11px] font-medium text-slate-400 hidden sm:inline">Perfil:</span>
-          <select
-            value={usuarioAtual.id}
-            onChange={(e) => {
-              const u = usuarios.find((item) => item.id === e.target.value);
-              if (u) setUsuarioAtual(u);
-            }}
-            className="rounded-md border-0 bg-transparent py-0.5 pl-1 pr-6 text-xs font-bold text-slate-800 focus:outline-hidden cursor-pointer"
-          >
-            {usuarios.map((u) => {
-              const prefixo =
-                u.perfil_nome === 'ADMINISTRADOR'
-                  ? '👔 Admin: '
-                  : u.perfil_nome === 'GERENTE'
-                  ? '👑 Gerente: '
-                  : u.perfil_nome === 'AUDITOR'
-                  ? '🔍 Auditor: '
-                  : '💼 Vendedor: ';
-              return (
-                <option key={u.id} value={u.id}>
-                  {prefixo}
-                  {u.nome}
-                  {!u.ativo ? ' [Inativo]' : ''}
-                </option>
-              );
-            })}
-          </select>
-        </div>
+        {/* User Badge / Switcher (Switcher available for Administrator or when acting as another user) */}
+        {podeAlternarPerfil ? (
+          <div className="flex items-center gap-1.5">
+            {isImpersonating && (
+              <button
+                type="button"
+                onClick={() => {
+                  voltarParaAdministrador();
+                  onIrParaDashboard?.();
+                }}
+                className="flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.98] px-2.5 py-1.5 text-xs font-bold text-white shadow-xs transition-all cursor-pointer"
+                title="Retornar para o perfil do Administrador original"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Voltar para Admin</span>
+              </button>
+            )}
+
+            <div
+              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs transition-colors ${
+                isImpersonating
+                  ? 'border-amber-300 bg-amber-50/80 text-amber-900 shadow-2xs'
+                  : 'border-slate-200 bg-slate-50 text-slate-800'
+              }`}
+            >
+              <span className="text-[11px] font-semibold text-slate-400 hidden sm:inline">
+                {isImpersonating ? 'Atuando como:' : 'Perfil:'}
+              </span>
+              <select
+                value={usuarioAtual.id}
+                onChange={(e) => {
+                  const u = usuarios.find((item) => item.id === e.target.value);
+                  if (u) {
+                    setUsuarioAtual(u);
+                    onIrParaDashboard?.();
+                  }
+                }}
+                className={`rounded-md border-0 bg-transparent py-0.5 pl-1 pr-6 text-xs font-bold focus:outline-hidden cursor-pointer ${
+                  isImpersonating ? 'text-amber-950' : 'text-slate-800'
+                }`}
+              >
+                {usuarios.map((u) => {
+                  const prefixo =
+                    u.perfil_nome === 'ADMINISTRADOR'
+                      ? '👔 Admin: '
+                      : u.perfil_nome === 'GERENTE'
+                      ? '👑 Gerente: '
+                      : u.perfil_nome === 'AUDITOR'
+                      ? '🔍 Auditor: '
+                      : '💼 Vendedor: ';
+                  return (
+                    <option key={u.id} value={u.id}>
+                      {prefixo}
+                      {u.nome}
+                      {!u.ativo ? ' [Inativo]' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 font-bold text-white text-[11px]">
+              {usuarioAtual.nome.charAt(0)}
+            </div>
+            <div className="flex flex-col">
+              <span className="font-bold text-slate-800 leading-tight">
+                {usuarioAtual.nome}
+              </span>
+              <span className="text-[10px] font-medium text-slate-500">
+                {usuarioAtual.cargo || usuarioAtual.perfil_nome}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Primary CTA */}
         {podeInserirVenda && (

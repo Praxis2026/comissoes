@@ -14,8 +14,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
-  Users,
-  Settings,
 } from 'lucide-react';
 
 interface LoginScreenProps {
@@ -23,7 +21,19 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
-  const { login, usuarios, logoEmpresa, nomeEmpresa } = useCommission();
+  const { login, logoEmpresa, nomeEmpresa } = useCommission();
+
+  const nomeExibicao =
+    nomeEmpresa === 'Capital Finance Comissões' ||
+    nomeEmpresa === 'Comissões Pro' ||
+    !nomeEmpresa
+      ? 'Praxis Comissionamentos'
+      : nomeEmpresa;
+
+  const logoExibicao =
+    logoEmpresa?.includes('CAPITAL%20FINANCE') || logoEmpresa?.includes('CAPITAL FINANCE')
+      ? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" fill="none"><rect width="220" height="60" rx="10" fill="%230f172a"/><circle cx="32" cy="30" r="18" fill="%2310b981"/><path d="M22 36l7-8 6 5 9-11" stroke="%23ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="60" y="28" fill="%23ffffff" font-family="sans-serif" font-weight="900" font-size="15">PRAXIS</text><text x="60" y="44" fill="%2334d399" font-family="sans-serif" font-weight="700" font-size="9" letter-spacing="1">COMISSIONAMENTOS</text></svg>'
+      : logoEmpresa;
 
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -55,15 +65,6 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     }, 450);
   };
 
-  const handlePreencherUsuarioDemo = (usuarioId: string) => {
-    const u = usuarios.find((item) => item.id === usuarioId);
-    if (u) {
-      setEmail(u.email);
-      setSenha(u.senha || (u.perfil_nome === 'ADMINISTRADOR' ? 'admin' : '123'));
-      setMensagemErro(null);
-    }
-  };
-
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-slate-950 px-4 py-12 sm:px-6 lg:px-8">
       {/* Background Decorative Ambient Glows */}
@@ -80,42 +81,35 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }}
       />
 
-      <div className="relative z-10 w-full max-w-md">
+      <div className="relative z-10 w-full max-w-lg">
         {/* Main Glassmorphic Login Card */}
         <div className="overflow-hidden rounded-3xl border border-slate-800/80 bg-slate-900/90 shadow-2xl backdrop-blur-xl">
           {/* Top Brand & Logo Header */}
           <div className="border-b border-slate-800/80 bg-slate-900/50 p-8 pb-6 text-center">
-            {/* Custom Logo Display or Default Emblem */}
-            <div className="mx-auto mb-4 flex items-center justify-center">
-              {logoEmpresa ? (
-                <div className="group relative flex max-h-20 max-w-[240px] items-center justify-center rounded-2xl border border-slate-700/60 bg-slate-950/60 p-3 shadow-inner">
+            {/* Custom Logo Display or Default Emblem (2x Space com Fundo Branco) */}
+            <div className="mx-auto mb-5 flex items-center justify-center">
+              {logoExibicao ? (
+                <div className="group relative flex min-h-[140px] max-h-40 w-full max-w-[480px] items-center justify-center rounded-2xl border border-slate-200 bg-white p-4 shadow-xl transition-all">
                   <img
-                    src={logoEmpresa}
-                    alt={nomeEmpresa || 'Logotipo da Empresa'}
-                    className="max-h-14 max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                    src={logoExibicao}
+                    alt={nomeExibicao}
+                    className="max-h-28 sm:max-h-32 max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
                   />
                 </div>
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-900/30">
-                  <Building2 className="h-8 w-8" />
+                <div className="flex h-32 w-32 items-center justify-center rounded-3xl border border-slate-200 bg-white text-emerald-600 shadow-xl">
+                  <Building2 className="h-16 w-16" />
                 </div>
               )}
             </div>
 
             {/* System Title */}
             <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">
-              {nomeEmpresa || 'Comissões'}
-              {!logoEmpresa && <span className="text-emerald-400">Pro</span>}
+              {nomeExibicao}
             </h1>
             <p className="mt-1 text-xs font-medium text-slate-400">
               Portal Seguro de Comissionamento & Governança
             </p>
-
-            {/* Logo tip badge */}
-            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-950/80 px-3 py-1 text-[11px] text-slate-400">
-              <Settings className="h-3 w-3 text-emerald-400" />
-              <span>Logotipo personalizável em Configurações</span>
-            </div>
           </div>
 
           {/* Form Content */}
@@ -213,86 +207,6 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 )}
               </button>
             </form>
-
-            {/* Divisor */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-800" />
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase">
-                <span className="bg-slate-900 px-2 font-bold tracking-wider text-slate-500">
-                  Acesso Rápido para Demonstração
-                </span>
-              </div>
-            </div>
-
-            {/* Quick Demo Account Selector */}
-            <div className="space-y-2">
-              <div className="text-[11px] text-slate-400 text-center mb-1">
-                Selecione um usuário para preenchimento automático de teste:
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handlePreencherUsuarioDemo('u-admin-01')}
-                  className="flex flex-col items-start rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-left hover:border-emerald-500/50 hover:bg-slate-800/60 transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-400">
-                    <ShieldCheck className="h-3 w-3" />
-                    <span>Administrador</span>
-                  </div>
-                  <span className="text-[11px] text-slate-300 font-medium truncate w-full">
-                    Carlos Mendes
-                  </span>
-                  <span className="text-[9px] text-slate-500">Senha: admin</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handlePreencherUsuarioDemo('u-vend-01')}
-                  className="flex flex-col items-start rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-left hover:border-blue-500/50 hover:bg-slate-800/60 transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-400">
-                    <Users className="h-3 w-3" />
-                    <span>Vendedor</span>
-                  </div>
-                  <span className="text-[11px] text-slate-300 font-medium truncate w-full">
-                    Lucas Silva
-                  </span>
-                  <span className="text-[9px] text-slate-500">Senha: 123</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handlePreencherUsuarioDemo('u-vend-02')}
-                  className="flex flex-col items-start rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-left hover:border-purple-500/50 hover:bg-slate-800/60 transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-purple-400">
-                    <Users className="h-3 w-3" />
-                    <span>Vendedora</span>
-                  </div>
-                  <span className="text-[11px] text-slate-300 font-medium truncate w-full">
-                    Mariana Costa
-                  </span>
-                  <span className="text-[9px] text-slate-500">Senha: 123</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handlePreencherUsuarioDemo('u-vend-03')}
-                  className="flex flex-col items-start rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-left hover:border-amber-500/50 hover:bg-slate-800/60 transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-400">
-                    <Users className="h-3 w-3" />
-                    <span>Vendedor</span>
-                  </div>
-                  <span className="text-[11px] text-slate-300 font-medium truncate w-full">
-                    Roberto Antunes
-                  </span>
-                  <span className="text-[9px] text-slate-500">Senha: 123</span>
-                </button>
-              </div>
-            </div>
           </div>
 
           {/* Footer Security Note */}

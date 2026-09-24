@@ -59,6 +59,8 @@ export function UserManagement({ onFeedback }: UserManagementProps) {
     toggleAtivoUsuario,
     excluirUsuario,
     temPermissao,
+    adminOriginal,
+    incorporarUsuario,
   } = useCommission();
 
   // Filtros e busca
@@ -687,6 +689,22 @@ export function UserManagement({ onFeedback }: UserManagementProps) {
                       {/* Ações */}
                       <td className="py-4 pl-4 pr-6 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Botão de Incorporar / Atuar como este Usuário (disponível para administradores) */}
+                          {(usuarioAtual.perfil_nome === 'ADMINISTRADOR' || adminOriginal !== null) && !isConectado && (
+                            <button
+                              onClick={() => {
+                                const res = incorporarUsuario(u.id);
+                                if (res.sucesso) {
+                                  onFeedback?.('sucesso', res.mensagem);
+                                }
+                              }}
+                              title={`Navegar e agir no sistema como ${u.nome} (${u.perfil_nome})`}
+                              className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+                            >
+                              <UserCheck className="h-4 w-4" />
+                            </button>
+                          )}
+
                           {podeAlterar && (
                             <button
                               onClick={() => abrirEditarUsuario(u)}

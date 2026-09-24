@@ -1,10 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCommission } from '@/lib/commission-context';
 import { FaixaEntradaComissao, RegraComissaoVendedor, TipoComissao } from '@/lib/types';
-import { formatarDataBR } from '@/lib/utils';
+import { formatarDataBR, formatarMoedaBR } from '@/lib/utils';
+import { CurrencyInput } from '@/components/CurrencyInput';
 import {
+  AlertCircle,
+  AlertTriangle,
   Calendar,
   CheckCircle2,
   Clock,
@@ -15,13 +18,15 @@ import {
   Percent,
   Plus,
   Save,
+  ShieldAlert,
   Sliders,
   Trash2,
   User,
+  X,
 } from 'lucide-react';
 
 export function AdminCommissionRules() {
-  const { usuarios, regras, salvarRegra } = useCommission();
+  const { usuarios, regras, vendas, lancamentos, salvarRegra, excluirRegra } = useCommission();
 
   const vendedores = usuarios.filter((u) => u.perfil_nome === 'VENDEDOR');
   const [vendedorSelecionadoId, setVendedorSelecionadoId] = useState(
@@ -43,6 +48,33 @@ export function AdminCommissionRules() {
   ]);
 
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  // Deletion modal state and logic
+  const [regraParaExcluir, setRegraParaExcluir] = useState<RegraComissaoVendedor | null>(null);
+
+  const lancamentosDaRegraParaExcluir = useMemo(() => {
+    if (!regraParaExcluir) return [];
+    return lancamentos.filter((l) => l.regra_aplicada_id === regraParaExcluir.id);
+  }, [regraParaExcluir, lancamentos]);
+
+  const vendasDaRegraParaExcluir = useMemo(() => {
+    if (!regraParaExcluir || lancamentosDaRegraParaExcluir.length === 0) return [];
+    const ids = new Set(lancamentosDaRegraParaExcluir.map((l) => l.venda_id));
+    return vendas.filter((v) => ids.has(v.id));
+  }, [regraParaExcluir, lancamentosDaRegraParaExcluir, vendas]);
+
+  const totalVendasAssociadasExclusao =
+    vendasDaRegraParaExcluir.length > 0
+      ? vendasDaRegraParaExcluir.length
+      : lancamentosDaRegraParaExcluir.length;
+  const temVendaAssociadaExclusao = totalVendasAssociadasExclusao > 0;
+
+  const handleConfirmarExclusaoRegra = () => {
+    if (!regraParaExcluir) return;
+    const res = excluirRegra(regraParaExcluir.id);
+    setFeedback(res.mensagem);
+    setRegraParaExcluir(null);
+  };
 
   // Regras existentes do vendedor
   const regrasDoVendedor = regras.filter((r) => r.vendedor_id === vendedorSelecionadoId);
@@ -107,7 +139,7 @@ export function AdminCommissionRules() {
     });
 
     if (res.sucesso) {
-      setFeedback(res.mensagem);
+      setFeedback('Regra salva com sucesso.');
       setTimeout(() => setFeedback(null), 4000);
     }
   };
@@ -135,6 +167,36 @@ export function AdminCommissionRules() {
           </div>
         </div>
       </div>
+
+      {/* Floating Toast Notification */}
+      {feedback && (
+        <div className="fixed top-5 right-5 z-50 max-w-md w-full animate-in slide-in-from-top-3 fade-in duration-200">
+          <div className="flex items-start gap-3 rounded-2xl p-4 shadow-2xl border backdrop-blur-md bg-slate-900 text-white border-emerald-500/60 shadow-emerald-950/40">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-slate-950 shadow-sm">
+              <CheckCircle2 className="h-5 w-5 stroke-[2.5]" />
+            </div>
+            <div className="flex-1 pt-0.5 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                  Sucesso
+                </span>
+                <span className="text-[10px] text-slate-400">• agora</span>
+              </div>
+              <p className="mt-0.5 text-sm font-bold text-white leading-snug">
+                {feedback}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFeedback(null)}
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+              title="Fechar"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {feedback && (
         <div className="flex items-center gap-2 rounded-lg bg-emerald-100 p-3 text-xs font-semibold text-emerald-900 border border-emerald-300">
@@ -303,18 +365,11 @@ export function AdminCommissionRules() {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Valor Nominal Fixo por Contrato/Venda (R$)
                 </label>
-                <div className="relative max-w-xs">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
+                <div className="max-w-xs">
+                  <CurrencyInput
                     value={valorFixo}
-                    onChange={(e) => setValorFixo(Number(e.target.value))}
-                    className="w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 py-2 text-xs font-bold text-slate-900 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
+                    onChange={(val) => setValorFixo(val)}
                   />
-                  <span className="pointer-events-none absolute left-3 top-2 text-xs font-bold text-slate-400">
-                    R$
-                  </span>
                 </div>
               </div>
             ) : (
@@ -421,6 +476,22 @@ export function AdminCommissionRules() {
               </div>
             )}
 
+            {feedback && (
+              <div className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-bold text-emerald-900 border border-emerald-300 ring-2 ring-emerald-500/10">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>{feedback}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFeedback(null)}
+                  className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+
             <div className="pt-2 flex justify-end">
               <button
                 type="submit"
@@ -478,7 +549,7 @@ export function AdminCommissionRules() {
                       </div>
                       <span className="text-[11px] text-slate-500">
                         {regra.tipo_comissao === 'VALOR_FIXO'
-                          ? `R$ ${regra.valor_fixo.toFixed(2)} / venda`
+                          ? `${formatarMoedaBR(regra.valor_fixo, true)} / venda`
                           : `${regra.faixas?.length || 0} faixas`}
                       </span>
                     </div>
@@ -514,6 +585,19 @@ export function AdminCommissionRules() {
                         ))}
                       </div>
                     )}
+
+                    {/* Footer Actions */}
+                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setRegraParaExcluir(regra)}
+                        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        title="Excluir regra de comissão"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        <span>Excluir</span>
+                      </button>
+                    </div>
                   </div>
                 );
               })
@@ -521,6 +605,165 @@ export function AdminCommissionRules() {
           </div>
         </div>
       </div>
+
+      {/* Modal de Confirmação de Exclusão de Regra */}
+      {regraParaExcluir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            {temVendaAssociadaExclusao ? (
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 shadow-xs">
+                      <ShieldAlert className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        Exclusão Não Permitida
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Integridade e governança de dados contratuais
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRegraParaExcluir(null)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-4 text-xs text-rose-900">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="h-5 w-5 shrink-0 text-rose-600 mt-0.5" />
+                    <div>
+                      <span className="font-bold block text-sm text-rose-700">
+                        Não é possível a exclusão pela existência de venda associada.
+                      </span>
+                      <p className="mt-1 text-xs text-rose-800 leading-relaxed">
+                        Esta regra de comissionamento de <strong className="font-semibold text-rose-950">{regraParaExcluir.vendedor_nome}</strong> possui <strong className="font-bold text-rose-950">{totalVendasAssociadasExclusao} venda(s) registrada(s)</strong> no sistema com lançamentos apurados.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-xs text-slate-700">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200/80">
+                    <span className="text-slate-500 font-medium">Vendedor:</span>
+                    <span className="font-bold text-slate-900">{regraParaExcluir.vendedor_nome}</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200/80">
+                    <span className="text-slate-500 font-medium">Vigência da Regra:</span>
+                    <span className="font-semibold text-slate-800">
+                      {formatarDataBR(regraParaExcluir.vigencia_inicio)} até{' '}
+                      {regraParaExcluir.vigencia_fim ? formatarDataBR(regraParaExcluir.vigencia_fim) : 'Indeterminado'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-medium block mb-1.5">
+                      Vendas vinculadas ({totalVendasAssociadasExclusao}):
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                      {vendasDaRegraParaExcluir.slice(0, 6).map((v) => (
+                        <span
+                          key={v.id}
+                          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-800"
+                        >
+                          <span className="font-bold text-emerald-700">{v.codigo_venda || v.numero_documento}</span>
+                          <span className="text-slate-400">·</span>
+                          <span className="truncate max-w-[100px]">{v.cliente_nome}</span>
+                        </span>
+                      ))}
+                      {totalVendasAssociadasExclusao > 6 && (
+                        <span className="inline-flex items-center rounded-md bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                          +{totalVendasAssociadasExclusao - 6} outras
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setRegraParaExcluir(null)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+                  >
+                    Entendido / Fechar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 shadow-xs">
+                      <Trash2 className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        Confirmar Exclusão de Regra
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Remoção definitiva de regra de comissionamento
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRegraParaExcluir(null)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="text-xs text-slate-600 leading-relaxed">
+                  Tem certeza que deseja excluir esta regra de comissionamento de <strong className="font-bold text-slate-900">{regraParaExcluir.vendedor_nome}</strong>?
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2 text-xs text-slate-700">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Vendedor:</span>
+                    <span className="font-bold text-slate-900">{regraParaExcluir.vendedor_nome}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Vigência:</span>
+                    <span className="font-semibold text-slate-800">
+                      {formatarDataBR(regraParaExcluir.vigencia_inicio)} até{' '}
+                      {regraParaExcluir.vigencia_fim ? formatarDataBR(regraParaExcluir.vigencia_fim) : 'Indeterminado'}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-200/80 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Nenhuma venda associada. A exclusão é segura.</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setRegraParaExcluir(null)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmarExclusaoRegra}
+                    className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 active:scale-[0.99] transition-all cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Sim, Excluir Regra</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

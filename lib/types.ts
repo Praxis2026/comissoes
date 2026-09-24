@@ -259,6 +259,19 @@ export interface Venda {
   criado_em: string;
 }
 
+export interface HistoricoEstorno {
+  motivo: string;
+  data: string;
+  por: string;
+  tipo_estorno?: 'PRE_REPASSE' | 'POS_LIQUIDACAO';
+  repasse_original_id?: string | null;
+  valor_estornado?: number;
+  forma_compensacao?: 'DESCONTO_PROXIMO_REPASSE' | 'DEVOLUCAO_DIRETA';
+  compensado?: boolean;
+  comprovante_devolucao?: string | null;
+  lancamento_ajuste_id?: string | null;
+}
+
 export interface LancamentoComissao {
   id: string; // UUID
   venda_id: string;
@@ -276,11 +289,9 @@ export interface LancamentoComissao {
   aprovado_em?: string | null;
   justificativa_rejeicao?: string | null;
   repasse_id?: string | null;
-  historico_estorno?: {
-    motivo: string;
-    data: string;
-    por: string;
-  } | null;
+  historico_estorno?: HistoricoEstorno | null;
+  is_debito_compensatorio?: boolean;
+  lancamento_estornado_origem_id?: string | null;
 }
 
 export interface Repasse {
@@ -341,7 +352,7 @@ export const PARAMETROS_COMISSIONAMENTO_PADRAO: ParametrosComissionamento = {
   trava_estorno_apenas_admin: true,
   dias_alerta_expiracao_vigencia: 30,
   logo_url: null,
-  nome_empresa: 'Comissões Pro',
+  nome_empresa: 'Praxis Comissionamentos',
   procedimentos_catalogo: [
     'Harmonização Facial e Aplicação de Preenchedor',
     'Implante Dentário Conexão Cônica + Prótese Cerâmica',

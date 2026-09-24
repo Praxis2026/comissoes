@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useCommission } from '@/lib/commission-context';
 import { LancamentoComissao, Venda } from '@/lib/types';
-import { formatarDataBR } from '@/lib/utils';
+import { formatarDataBR, formatarMoedaBR } from '@/lib/utils';
 import {
   AlertCircle,
   AlertTriangle,
@@ -20,12 +20,15 @@ import {
 export function AdminApprovals() {
   const {
     usuarios,
+    usuarioAtual,
     vendas,
     lancamentos,
     aprovarLancamento,
     rejeitarLancamento,
     estornarLancamento,
   } = useCommission();
+
+  const isAdmin = usuarioAtual.perfil_nome === 'ADMINISTRADOR';
 
   const [vendedorFiltro, setVendedorFiltro] = useState<string>('TODOS');
   const [busca, setBusca] = useState('');
@@ -41,6 +44,21 @@ export function AdminApprovals() {
   } | null>(null);
   const [motivoEstorno, setMotivoEstorno] = useState('');
   const [toast, setToast] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
+
+  if (!isAdmin) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xs max-w-xl mx-auto mt-6">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 mb-3">
+          <ShieldCheck className="h-6 w-6" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900">Acesso Restrito ao Administrador</h3>
+        <p className="mt-1 text-xs text-slate-500">
+          O módulo de Aprovações & Auditoria é de uso exclusivo da Administração.
+          Usuários não administradores não possuem permissão para auditar ou visualizar comissões de outros profissionais.
+        </p>
+      </div>
+    );
+  }
 
   // Pendentes de aprovação
   const pendentes = lancamentos
@@ -264,7 +282,10 @@ export function AdminApprovals() {
                   <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-200/80">
                     <span className="text-slate-500 block text-[11px]">% Proporção Entrada</span>
                     <span className="font-bold text-emerald-700">
-                      {lancamento.percentual_entrada_calculado.toFixed(2)}%
+                      {lancamento.percentual_entrada_calculado.toLocaleString('pt-BR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}%
                     </span>
                   </div>
 
@@ -272,8 +293,11 @@ export function AdminApprovals() {
                     <span className="text-slate-500 block text-[11px]">Alíquota / Modelo</span>
                     <span className="font-bold text-slate-900">
                       {lancamento.tipo_regra_aplicada === 'VALOR_FIXO'
-                        ? `R$ ${lancamento.aliquota_ou_fixo_aplicado.toFixed(2)} (Fixo)`
-                        : `${lancamento.aliquota_ou_fixo_aplicado.toFixed(2)}% (Escalonado)`}
+                        ? `${formatarMoedaBR(lancamento.aliquota_ou_fixo_aplicado, true)} (Fixo)`
+                        : `${lancamento.aliquota_ou_fixo_aplicado.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}% (Escalonado)`}
                     </span>
                   </div>
                 </div>

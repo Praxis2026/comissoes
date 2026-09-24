@@ -21,7 +21,6 @@ import {
   Layers,
   LayoutDashboard,
   LogOut,
-  PlusCircle,
   RotateCcw,
   Settings,
   Shield,
@@ -44,7 +43,7 @@ interface SidebarProps {
   setSubAbaVendas?: (status: string) => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
-  onNovaVenda: () => void;
+  onNovaVenda?: () => void;
 }
 
 export function Sidebar({
@@ -54,12 +53,9 @@ export function Sidebar({
   setSubAbaVendas,
   isOpenMobile,
   onCloseMobile,
-  onNovaVenda,
 }: SidebarProps) {
   const {
     usuarioAtual,
-    setUsuarioAtual,
-    usuarios,
     vendas,
     lancamentos,
     resetarParaDadosIniciais,
@@ -67,6 +63,9 @@ export function Sidebar({
     logoEmpresa,
     nomeEmpresa,
     logout,
+    adminOriginal,
+    isImpersonating,
+    voltarParaAdministrador,
   } = useCommission();
 
   const [submenusVendasExpandidos, setSubmenusVendasExpandidos] = useState(true);
@@ -74,7 +73,6 @@ export function Sidebar({
   const isAdmin = usuarioAtual.perfil_nome === 'ADMINISTRADOR';
 
   // Permission checks per module
-  const podeInserirVenda = temPermissao('minhas_vendas', 'inserir');
   const temAcessoDashboard = temPermissao('dashboard');
   const temAcessoMinhasVendas = temPermissao('minhas_vendas');
   const temAcessoConferencia = temPermissao('conferencia_vendedor');
@@ -161,25 +159,21 @@ export function Sidebar({
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800/80 px-5">
           <div className="flex items-center gap-3 overflow-hidden">
             {logoEmpresa ? (
-              <div className="flex h-10 max-w-[130px] shrink-0 items-center justify-center rounded-lg bg-slate-950 px-2 py-1 border border-slate-800">
+              <div className="flex h-10 max-w-[130px] shrink-0 items-center justify-center rounded-lg bg-white px-2.5 py-1 shadow-xs border border-white/20">
                 <img
                   src={logoEmpresa}
                   alt={nomeEmpresa || 'Logo'}
-                  className="max-h-7 max-w-full object-contain"
+                  className="max-h-8 max-w-full object-contain"
                 />
               </div>
             ) : (
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
-                <Building2 className="h-5 w-5" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-xs border border-white/20">
+                <Building2 className="h-5 w-5 text-emerald-600" />
               </div>
             )}
             <div className="truncate">
               <span className="text-sm font-black tracking-tight text-white block truncate">
-                {nomeEmpresa || (
-                  <>
-                    Comissões<span className="text-emerald-400">Pro</span>
-                  </>
-                )}
+                {nomeEmpresa || 'Praxis Comissionamentos'}
               </span>
               <span className="block text-[10px] font-semibold text-slate-400 tracking-wide uppercase">
                 Motor Relacional 1.1
@@ -196,24 +190,8 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Quick Action: New Sale */}
-        {podeInserirVenda && (
-          <div className="p-4 pb-2">
-            <button
-              onClick={() => {
-                onNovaVenda();
-                onCloseMobile();
-              }}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-500 active:scale-[0.98] transition-all"
-            >
-              <PlusCircle className="h-4 w-4" />
-              Lançar Nova Venda
-            </button>
-          </div>
-        )}
-
         {/* Navigation Groups (Scrollable próprio do menu) */}
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-6 text-xs custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-3.5 py-4 space-y-5 text-xs custom-scrollbar">
           {/* Group 1: Visão Geral */}
           {temAcessoDashboard && (
             <div>
@@ -515,11 +493,29 @@ export function Sidebar({
                   <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
                 </button>
 
+                {/* Sub-item: Regras de Comissionamento */}
+                <button
+                  onClick={() => handleNavegar('regras')}
+                  className={`w-full flex items-center justify-between rounded-lg py-1.5 pl-8 pr-3 text-[11px] font-medium transition-colors ${
+                    abaAtiva === 'regras'
+                      ? 'text-emerald-300 font-bold bg-slate-800/40'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="h-3 w-3" />
+                    <span>Regras de Comissão</span>
+                  </div>
+                  <span className="rounded bg-emerald-500/30 px-1 py-0.2 text-[8px] font-black text-emerald-300 uppercase">
+                    Salvar
+                  </span>
+                </button>
+
                 {/* Sub-item: Gestão de Usuários */}
                 <button
-                  onClick={() => handleNavegar('configuracoes')}
+                  onClick={() => handleNavegar('usuarios')}
                   className={`w-full flex items-center justify-between rounded-lg py-1.5 pl-8 pr-3 text-[11px] font-medium transition-colors ${
-                    abaAtiva === 'configuracoes' || abaAtiva === 'regras'
+                    abaAtiva === 'usuarios'
                       ? 'text-emerald-300 font-bold bg-slate-800/40'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                   }`}
@@ -528,18 +524,6 @@ export function Sidebar({
                     <Users className="h-3 w-3" />
                     <span>Gestão de Usuários</span>
                   </div>
-                  <span className="rounded bg-emerald-500/30 px-1 py-0.2 text-[8px] font-black text-emerald-300 uppercase">
-                    Novo
-                  </span>
-                </button>
-
-                {/* Sub-item: Parâmetros de Comissão */}
-                <button
-                  onClick={() => handleNavegar('configuracoes')}
-                  className="w-full flex items-center gap-2 rounded-lg py-1.5 pl-8 pr-3 text-[11px] font-medium transition-colors text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-                >
-                  <SlidersHorizontal className="h-3 w-3" />
-                  <span>Modelos & Regras</span>
                 </button>
               </nav>
             </div>
@@ -549,6 +533,30 @@ export function Sidebar({
         {/* User Profile & Role Switcher Footer */}
         <div className="border-t border-slate-800/80 p-3 bg-slate-950/40">
           <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-3">
+            {/* Impersonation Back button */}
+            {isImpersonating && adminOriginal && (
+              <div className="mb-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-center">
+                <div className="text-[10px] font-bold text-amber-300">
+                  Navegando como {usuarioAtual.perfil_nome}
+                </div>
+                <div className="text-[9px] text-slate-300 truncate">
+                  Admin: {adminOriginal.nome}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    voltarParaAdministrador();
+                    setAbaAtiva('dashboard');
+                    if (setSubAbaVendas) setSubAbaVendas('TODOS');
+                  }}
+                  className="mt-1.5 w-full rounded-md bg-amber-500 hover:bg-amber-600 py-1 text-[10px] font-bold text-slate-950 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Voltar para Admin
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5 overflow-hidden">
                 <div
@@ -576,41 +584,8 @@ export function Sidebar({
               </div>
             </div>
 
-            {/* Quick Switch User Selector */}
-            <div className="mt-2.5 pt-2 border-t border-slate-800/80">
-              <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                Simular Usuário Logado:
-              </label>
-              <select
-                value={usuarioAtual.id}
-                onChange={(e) => {
-                  const u = usuarios.find((item) => item.id === e.target.value);
-                  if (u) setUsuarioAtual(u);
-                }}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] font-medium text-slate-200 focus:border-emerald-500 focus:outline-hidden"
-              >
-                {usuarios.map((u) => {
-                  const prefixo =
-                    u.perfil_nome === 'ADMINISTRADOR'
-                      ? '👔 [Admin] '
-                      : u.perfil_nome === 'GERENTE'
-                      ? '👑 [Gerente] '
-                      : u.perfil_nome === 'AUDITOR'
-                      ? '🔍 [Auditor] '
-                      : '💼 [Vendedor] ';
-                  return (
-                    <option key={u.id} value={u.id}>
-                      {prefixo}
-                      {u.nome}
-                      {!u.ativo ? ' [Inativo]' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
             {/* Actions: Reset Database & Logout */}
-            <div className="mt-2 flex items-center justify-between pt-2 border-t border-slate-800">
+            <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-slate-800">
               <button
                 onClick={() => {
                   if (

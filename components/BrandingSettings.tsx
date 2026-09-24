@@ -39,10 +39,10 @@ const LOGOS_PREDEFINIDOS = [
     url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none"><rect width="200" height="60" rx="10" fill="%230f172a"/><path d="M22 25c0-6 4-11 10-11s10 5 10 11c0 6-3 15-5 21-2 5-3 5-5 0-2-5-5-15-5-21z" fill="%230ea5e9"/><text x="56" y="28" fill="%23ffffff" font-family="sans-serif" font-weight="900" font-size="16">DENTAL PRO</text><text x="56" y="44" fill="%2338bdf8" font-family="sans-serif" font-weight="700" font-size="10" letter-spacing="1">IMPLANTES & ODONTO</text></svg>',
   },
   {
-    nome: 'Capital Finance Comissões',
-    categoria: 'Financeiro / Holding',
-    // SVG em data URL de gráfico ascendente dourado
-    url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none"><rect width="200" height="60" rx="10" fill="%2318181b"/><circle cx="32" cy="30" r="18" fill="%23f59e0b"/><path d="M22 36l7-8 6 5 9-11" stroke="%23ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="60" y="28" fill="%23ffffff" font-family="sans-serif" font-weight="900" font-size="16">CAPITAL FINANCE</text><text x="60" y="44" fill="%23fcd34d" font-family="sans-serif" font-weight="700" font-size="10" letter-spacing="1">HOLDING & GESTÃO</text></svg>',
+    nome: 'Praxis Comissionamentos',
+    categoria: 'Gestão Comercial / Vendas',
+    // SVG em data URL estilizado para Praxis Comissionamentos
+    url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" fill="none"><rect width="220" height="60" rx="10" fill="%230f172a"/><circle cx="32" cy="30" r="18" fill="%2310b981"/><path d="M22 36l7-8 6 5 9-11" stroke="%23ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="60" y="28" fill="%23ffffff" font-family="sans-serif" font-weight="900" font-size="15">PRAXIS</text><text x="60" y="44" fill="%2334d399" font-family="sans-serif" font-weight="700" font-size="9" letter-spacing="1">COMISSIONAMENTOS</text></svg>',
   },
   {
     nome: 'Apex Tech Solutions',
@@ -66,7 +66,7 @@ export function BrandingSettings({ onFeedback }: BrandingSettingsProps) {
 
   // Local state for draft editing
   const [logoDraft, setLogoDraft] = useState<string | null>(logoEmpresa);
-  const [nomeDraft, setNomeDraft] = useState<string>(nomeEmpresa || 'Comissões Pro');
+  const [nomeDraft, setNomeDraft] = useState<string>(nomeEmpresa || 'Praxis Comissionamentos');
   const [urlInput, setUrlInput] = useState<string>('');
   const [nomeArquivoCarregado, setNomeArquivoCarregado] = useState<string | null>(null);
   const [tamanhoArquivo, setTamanhoArquivo] = useState<string | null>(null);
@@ -191,13 +191,13 @@ export function BrandingSettings({ onFeedback }: BrandingSettingsProps) {
     if (!isAdmin) return;
     if (window.confirm('Deseja remover o logotipo personalizado e voltar ao padrão nativo do sistema?')) {
       setLogoDraft(null);
-      setNomeDraft('Comissões Pro');
+      setNomeDraft('Praxis Comissionamentos');
       setNomeArquivoCarregado(null);
       setTamanhoArquivo(null);
       salvarLogoEmpresa(null);
-      salvarNomeEmpresa('Comissões Pro');
+      salvarNomeEmpresa('Praxis Comissionamentos');
       if (onFeedback) {
-        onFeedback('sucesso', 'Logotipo padrão do sistema restaurado com sucesso.');
+        onFeedback('sucesso', 'Identidade padrão do sistema restaurada com sucesso.');
       }
     }
   };
@@ -461,7 +461,7 @@ export function BrandingSettings({ onFeedback }: BrandingSettingsProps) {
                 </div>
 
                 <div className="text-sm font-black text-white">
-                  {nomeDraft || 'Comissões Pro'}
+                  {nomeDraft || 'Praxis Comissionamentos'}
                 </div>
                 <div className="text-[10px] text-slate-400 mt-0.5">
                   Portal Seguro de Comissionamento & Governança
@@ -504,7 +504,7 @@ export function BrandingSettings({ onFeedback }: BrandingSettingsProps) {
                 )}
                 <div className="truncate">
                   <div className="text-xs font-black text-white truncate">
-                    {nomeDraft || 'Comissões Pro'}
+                    {nomeDraft || 'Praxis Comissionamentos'}
                   </div>
                   <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
                     Motor Relacional 1.1
@@ -533,7 +533,7 @@ export function BrandingSettings({ onFeedback }: BrandingSettingsProps) {
                     <Building2 className="h-4 w-4 text-emerald-600" />
                   )}
                   <span className="text-xs font-bold text-slate-800 truncate">
-                    {nomeDraft || 'Comissões Pro'}
+                    {nomeDraft || 'Praxis Comissionamentos'}
                   </span>
                 </div>
                 <div className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-800 border border-emerald-200">

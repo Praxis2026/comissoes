@@ -79,3 +79,18 @@ export function formatarDataHoraBR(
   }
   return formatarDataBR(data);
 }
+
+/**
+ * Formata um valor numérico para moeda brasileira com separador de milhar '.' e centavos ','
+ * Exemplo: 3230.77 -> "3.230,77"
+ */
+export function formatarMoedaBR(valor?: number | null, incluirPrefixo: boolean = false): string {
+  if (valor === null || valor === undefined || isNaN(valor)) {
+    return incluirPrefixo ? 'R$ 0,00' : '0,00';
+  }
+  const formatado = valor.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return incluirPrefixo ? `R$ ${formatado}` : formatado;
+}

@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 
 export function ImportSalesModal() {
-  const { usuarios, criarOuEditarVenda } = useCommission();
+  const { usuarios, usuarioAtual, criarOuEditarVenda } = useCommission();
+  const isAdmin = usuarioAtual.perfil_nome === 'ADMINISTRADOR';
   const vendedores = usuarios.filter((u) => u.perfil_nome === 'VENDEDOR');
 
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -63,6 +64,20 @@ export function ImportSalesModal() {
       data: new Date().toISOString().split('T')[0],
     },
   ]);
+
+  if (!isAdmin) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xs max-w-xl mx-auto mt-6">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 mb-3">
+          <Database className="h-6 w-6" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900">Acesso Restrito ao Administrador</h3>
+        <p className="mt-1 text-xs text-slate-500">
+          A importação e sincronização de vendas em lote de múltiplos vendedores via ERP é restrita ao perfil Administrador.
+        </p>
+      </div>
+    );
+  }
 
   const handleProcessarLote = (submeterAprovacao: boolean) => {
     let sucessos = 0;
