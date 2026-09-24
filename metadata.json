@@ -1,0 +1,6 @@
+{
+  "name": "Sistema de Comissionamento Comercial",
+  "description": "Sistema completo de cálculo, controle e repasse de comissões com faixas escalonadas por entrada, valor fixo, versionamento de vigência e fluxo RBAC.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

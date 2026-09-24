@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres_comissoes
+    restart: always
+    environment:
+      POSTGRES_DB: comissoes_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_comissoes:/var/lib/postgresql/data
+      # Executa automaticamente todas as migrations na primeira inicialização do container
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d comissoes_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata_comissoes:
+    driver: local
