@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "clean": "next clean",
     "migrate": "node scripts/migrate.mjs",
-    "migrate:status": "node scripts/migrate.mjs status"
+    "migrate:status": "node scripts/migrate.mjs status",
+    "seed": "node scripts/seed.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
