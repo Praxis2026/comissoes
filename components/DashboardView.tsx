@@ -915,7 +915,7 @@ export function DashboardView({
                           <div className="text-[10px] text-slate-400 font-normal">
                             {lancamento.tipo_regra_aplicada === 'VALOR_FIXO'
                               ? 'Fixo'
-                              : `${lancamento.aliquota_ou_fixo_aplicado.toFixed(1)}%`}
+                              : `${Number(lancamento.aliquota_ou_fixo_aplicado).toFixed(1)}%`}
                           </div>
                         )}
                       </td>

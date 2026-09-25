@@ -200,13 +200,14 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
           setAdminOriginal(u);
         }
 
+        const isAdmin = u.perfil_nome === 'ADMINISTRADOR';
         const [vendasRes, lancRes, repassesRes, regrasRes, cfgRes, usuariosRes] = await Promise.all([
           fetch('/api/vendas'),
           fetch('/api/lancamentos'),
           fetch('/api/repasses'),
           fetch('/api/regras'),
           fetch('/api/configuracoes'),
-          fetch('/api/usuarios'),
+          isAdmin ? fetch('/api/usuarios') : Promise.resolve(null),
         ]);
 
         if (vendasRes.ok) setVendas(await vendasRes.json());
@@ -219,7 +220,7 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
           setLogoEmpresa(cfg.logo_url || null);
           setNomeEmpresa(cfg.nome_empresa || 'Praxis Comissionamentos');
         }
-        if (usuariosRes.ok) {
+        if (usuariosRes?.ok) {
           const todos: Usuario[] = await usuariosRes.json();
           setUsuarios(todos.map((x) => ({ ...x, permissoes: normalizarPermissoesUsuario(x) })));
         }
@@ -256,7 +257,7 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
         fetch('/api/repasses'),
         fetch('/api/regras'),
         fetch('/api/configuracoes'),
-        fetch('/api/usuarios'),
+        u.perfil_nome === 'ADMINISTRADOR' ? fetch('/api/usuarios') : Promise.resolve(null),
       ]);
       if (vendasRes.ok) setVendas(await vendasRes.json());
       if (lancRes.ok) setLancamentos(await lancRes.json());
@@ -268,7 +269,7 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
         setLogoEmpresa(cfg.logo_url || null);
         setNomeEmpresa(cfg.nome_empresa || 'Praxis Comissionamentos');
       }
-      if (usuariosRes.ok) {
+      if (usuariosRes?.ok) {
         const todos: Usuario[] = await usuariosRes.json();
         setUsuarios(todos.map((x) => ({ ...x, permissoes: normalizarPermissoesUsuario(x) })));
       }
