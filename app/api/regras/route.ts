@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 export async function GET(req: NextRequest) {
+  const perfil = req.headers.get('X-User-Perfil');
+  const userId = req.headers.get('X-Impersonating') || req.headers.get('X-User-Id')!;
+  const isAdmin = perfil === 'ADMINISTRADOR';
+
   const { searchParams } = new URL(req.url);
-  const vendedorId = searchParams.get('vendedor_id');
+  const vendedorId = isAdmin ? searchParams.get('vendedor_id') : userId;
 
   const where = vendedorId ? 'WHERE r.vendedor_id = $1' : '';
   const params = vendedorId ? [vendedorId] : [];
