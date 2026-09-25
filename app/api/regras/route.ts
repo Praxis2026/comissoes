@@ -30,6 +30,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (req.headers.get('X-User-Perfil') !== 'ADMINISTRADOR') {
+    return NextResponse.json({ erro: 'Apenas administradores podem criar regras' }, { status: 403 });
+  }
   const { vendedor_id, tipo_comissao, valor_fixo, vigencia_inicio, faixas } = await req.json();
 
   const client = await pool.connect();

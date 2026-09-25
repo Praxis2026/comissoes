@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (req.headers.get('X-User-Perfil') !== 'ADMINISTRADOR') {
+    return NextResponse.json({ erro: 'Apenas administradores podem registrar repasses' }, { status: 403 });
+  }
   const adminId = req.headers.get('X-User-Id')!;
   const { vendedor_id, lancamentos_ids, data_repasse, comprovante_transacao, observacoes } = await req.json();
 

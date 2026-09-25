@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
+function requireAdmin(req: NextRequest): NextResponse | null {
+  if (req.headers.get('X-User-Perfil') !== 'ADMINISTRADOR') {
+    return NextResponse.json({ erro: 'Apenas administradores podem gerenciar regras' }, { status: 403 });
+  }
+  return null;
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const deny = requireAdmin(req);
+  if (deny) return deny;
   const { id } = await params;
   const { vigencia_fim } = await req.json();
   await pool.query(
@@ -11,7 +20,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const deny = requireAdmin(req);
+  if (deny) return deny;
   const { id } = await params;
   try {
     await pool.query('DELETE FROM regras_comissao_vendedor WHERE id = $1', [id]);

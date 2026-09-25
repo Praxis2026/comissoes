@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+function requireAdmin(req: NextRequest): NextResponse | null {
+  if (req.headers.get('X-User-Perfil') !== 'ADMINISTRADOR') {
+    return NextResponse.json({ erro: 'Apenas administradores podem gerenciar meios de pagamento' }, { status: 403 });
+  }
+  return null;
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const deny = requireAdmin(req);
+  if (deny) return deny;
   const { id } = await params;
   const { label, descricao, is_entrada_valida, ativo, ordem } = await req.json();
   const result = await query(
@@ -13,7 +22,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json(result.rows[0]);
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const deny = requireAdmin(req);
+  if (deny) return deny;
   const { id } = await params;
   try {
     await query('DELETE FROM meios_pagamento WHERE id = $1 AND sistema_padrao = false', [id]);

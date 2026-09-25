@@ -7,6 +7,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (req.headers.get('X-User-Perfil') !== 'ADMINISTRADOR') {
+    return NextResponse.json({ erro: 'Apenas administradores podem gerenciar meios de pagamento' }, { status: 403 });
+  }
   const { id, codigo, label, descricao, is_entrada_valida, ativo, ordem } = await req.json();
   const meioId = id || `mp-${Date.now()}`;
   const result = await query(

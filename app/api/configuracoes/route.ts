@@ -28,6 +28,9 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  if (req.headers.get('X-User-Perfil') !== 'ADMINISTRADOR') {
+    return NextResponse.json({ erro: 'Apenas administradores podem alterar configurações' }, { status: 403 });
+  }
   const body = await req.json();
   const {
     nome_empresa, logo_url, percentual_comissao_padrao_residual,

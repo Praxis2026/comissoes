@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (req.headers.get('X-User-Perfil') !== 'ADMINISTRADOR') {
+    return NextResponse.json({ erro: 'Apenas administradores podem aprovar lançamentos' }, { status: 403 });
+  }
   const { id } = await params;
   const adminId = req.headers.get('X-User-Id')!;
   try {
