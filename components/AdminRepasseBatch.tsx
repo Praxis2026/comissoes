@@ -137,11 +137,11 @@ export function AdminRepasseBatch() {
 
   const totalComissoesBrutas = itensMarcados
     .filter((i) => !i.lancamento.is_debito_compensatorio)
-    .reduce((acc, curr) => acc + curr.lancamento.valor_comissao_calculado, 0);
+    .reduce((acc, curr) => acc + Number(curr.lancamento.valor_comissao_calculado), 0);
 
   const totalDeducoesEstorno = itensMarcados
     .filter((i) => i.lancamento.is_debito_compensatorio)
-    .reduce((acc, curr) => acc + Math.abs(curr.lancamento.valor_comissao_calculado), 0);
+    .reduce((acc, curr) => acc + Math.abs(Number(curr.lancamento.valor_comissao_calculado)), 0);
 
   const totalComissaoLote = totalComissoesBrutas - totalDeducoesEstorno;
 

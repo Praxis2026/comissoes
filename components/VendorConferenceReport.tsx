@@ -89,15 +89,15 @@ export function VendorConferenceReport() {
   // Métricas financeiras
   const totalAguardandoConferencia = itensConferencia
     .filter((i) => i.lancamento.status === 'APROVADO')
-    .reduce((acc, curr) => acc + curr.lancamento.valor_comissao_calculado, 0);
+    .reduce((acc, curr) => acc + Number(curr.lancamento.valor_comissao_calculado), 0);
 
   const totalConferidoAguardandoRepasse = itensConferencia
     .filter((i) => i.lancamento.status === 'CONFERIDO')
-    .reduce((acc, curr) => acc + curr.lancamento.valor_comissao_calculado, 0);
+    .reduce((acc, curr) => acc + Number(curr.lancamento.valor_comissao_calculado), 0);
 
   const totalLiquidado = itensConferencia
     .filter((i) => i.lancamento.status === 'LIQUIDADO')
-    .reduce((acc, curr) => acc + curr.lancamento.valor_comissao_calculado, 0);
+    .reduce((acc, curr) => acc + Number(curr.lancamento.valor_comissao_calculado), 0);
 
   const itensAprovadosParaSelecao = itensConferencia.filter(
     (i) => i.lancamento.status === 'APROVADO'
