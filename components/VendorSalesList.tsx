@@ -149,11 +149,11 @@ export function VendorSalesList({
 
   // Métricas
   const totalVendido = vendasFiltradas.reduce(
-    (acc, curr) => acc + curr.venda.valor_total_venda,
+    (acc, curr) => acc + Number(curr.venda.valor_total_venda),
     0
   );
   const totalComissoes = vendasFiltradas.reduce(
-    (acc, curr) => acc + (curr.lancamento?.valor_comissao_calculado || 0),
+    (acc, curr) => acc + Number(curr.lancamento?.valor_comissao_calculado || 0),
     0
   );
   const qtdRascunhos = vendasComLancamento.filter(

@@ -312,7 +312,7 @@ export function ReceiptModal({
               </span>
               <span className="text-sm font-bold text-slate-800">
                 R$ {vendasDoRepasse
-                  .reduce((acc, curr) => acc + curr.venda.valor_total_venda, 0)
+                  .reduce((acc, curr) => acc + Number(curr.venda.valor_total_venda), 0)
                   .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>

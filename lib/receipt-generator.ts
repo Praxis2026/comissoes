@@ -28,11 +28,11 @@ export function gerarHtmlRecibo({
   const horaHoje = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
   const totalVendido = vendasDoRepasse.reduce(
-    (acc, curr) => acc + curr.venda.valor_total_venda,
+    (acc, curr) => acc + Number(curr.venda.valor_total_venda),
     0
   );
   const totalEntrada = vendasDoRepasse.reduce(
-    (acc, curr) => acc + curr.venda.valor_entrada_valida,
+    (acc, curr) => acc + Number(curr.venda.valor_entrada_valida),
     0
   );
   const totalComissao = repasse.valor_total_repassado;

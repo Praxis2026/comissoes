@@ -131,7 +131,7 @@ export function AdminRepasseBatch() {
   );
 
   const totalVendasLote = itensMarcados.reduce(
-    (acc, curr) => acc + (curr.lancamento.is_debito_compensatorio ? 0 : curr.venda.valor_total_venda),
+    (acc, curr) => acc + (curr.lancamento.is_debito_compensatorio ? 0 : Number(curr.venda.valor_total_venda)),
     0
   );
 
@@ -640,7 +640,7 @@ export function AdminRepasseBatch() {
                             ) : (
                               <span className="text-emerald-700">
                                 R${' '}
-                                {lancamento.valor_comissao_calculado.toLocaleString('pt-BR', {
+                                {Number(lancamento.valor_comissao_calculado).toLocaleString('pt-BR', {
                                   minimumFractionDigits: 2,
                                 })}
                               </span>
@@ -777,7 +777,7 @@ export function AdminRepasseBatch() {
                       const vend = usuarios.find((u) => u.id === rep.vendedor_id);
                       const lancsDesteRepasse = lancamentos.filter((l) => rep.lancamentos_ids.includes(l.id));
                       const totalVendasLote = lancsDesteRepasse.reduce(
-                        (acc, curr) => acc + (curr.is_debito_compensatorio ? 0 : curr.valor_base_calculo),
+                        (acc, curr) => acc + (curr.is_debito_compensatorio ? 0 : Number(curr.valor_base_calculo)),
                         0
                       );
                       const isExpandido = lotesExpandidos.includes(rep.id);
@@ -927,7 +927,7 @@ export function AdminRepasseBatch() {
                                                 ) : (
                                                   <span className="text-slate-900">
                                                     R${' '}
-                                                    {l.valor_comissao_calculado.toLocaleString('pt-BR', {
+                                                    {Number(l.valor_comissao_calculado).toLocaleString('pt-BR', {
                                                       minimumFractionDigits: 2,
                                                     })}
                                                   </span>
