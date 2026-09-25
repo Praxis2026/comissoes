@@ -52,7 +52,7 @@ export function CommissionEstornoModal({
   const isPago = lancamento.status === 'LIQUIDADO';
   const isJaEstornado = lancamento.status === 'ESTORNADO';
 
-  const handleConfirmar = () => {
+  const handleConfirmar = async () => {
     if (!motivo.trim()) {
       setErro('Por favor, informe a justificativa detalhada para o estorno.');
       return;
@@ -82,7 +82,7 @@ export function CommissionEstornoModal({
           setErro(res.mensagem);
         }
       } else {
-        const res = estornarLancamento(lancamento.id, motivo.trim());
+        const res = await estornarLancamento(lancamento.id, motivo.trim());
         if (res.sucesso) {
           onSucesso?.(res.mensagem);
           onClose();

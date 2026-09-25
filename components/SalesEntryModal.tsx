@@ -122,7 +122,7 @@ function SalesEntryForm({ onClose, vendaParaEdicao }: FormInnerProps) {
 
   const isMeioValido = parametros.meios_pagamento_entrada_validos.includes(tipoPagamentoEntrada);
 
-  const handleSubmit = (submeterParaAprovacao: boolean) => {
+  const handleSubmit = async (submeterParaAprovacao: boolean) => {
     setMensagemErro(null);
 
     if (!numeroDocumento.trim()) {
@@ -146,7 +146,7 @@ function SalesEntryForm({ onClose, vendaParaEdicao }: FormInnerProps) {
       return;
     }
 
-    const res = criarOuEditarVenda(
+    const res = await criarOuEditarVenda(
       {
         id: vendaParaEdicao?.id,
         numero_sequencial: numeroSequencial,
@@ -651,9 +651,9 @@ function SalesEntryForm({ onClose, vendaParaEdicao }: FormInnerProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     if (vendaParaEdicao) {
-                      const res = excluirRascunho(vendaParaEdicao.id);
+                      const res = await excluirRascunho(vendaParaEdicao.id);
                       if (res.sucesso) {
                         onClose();
                       } else {

@@ -42,7 +42,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [carregando, setCarregando] = useState(false);
   const [mensagemErro, setMensagemErro] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMensagemErro(null);
 
@@ -52,17 +52,14 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     }
 
     setCarregando(true);
+    const resultado = await login(email, senha);
+    setCarregando(false);
 
-    setTimeout(() => {
-      const resultado = login(email, senha);
-      setCarregando(false);
-
-      if (!resultado.sucesso) {
-        setMensagemErro(resultado.mensagem);
-      } else {
-        if (onLoginSuccess) onLoginSuccess();
-      }
-    }, 450);
+    if (!resultado.sucesso) {
+      setMensagemErro(resultado.mensagem);
+    } else {
+      if (onLoginSuccess) onLoginSuccess();
+    }
   };
 
   return (

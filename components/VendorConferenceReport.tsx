@@ -117,9 +117,9 @@ export function VendorConferenceReport() {
     );
   };
 
-  const handleConferirSelecionados = () => {
+  const handleConferirSelecionados = async () => {
     if (!selecionados.length) return;
-    const res = conferirLancamentosEmLote(selecionados);
+    const res = await conferirLancamentosEmLote(selecionados);
     if (res.sucesso) {
       setMensagemSucesso(res.mensagem);
       setSelecionados([]);
@@ -127,8 +127,8 @@ export function VendorConferenceReport() {
     }
   };
 
-  const handleConferirIndividual = (id: string) => {
-    const res = conferirLancamento(id);
+  const handleConferirIndividual = async (id: string) => {
+    const res = await conferirLancamento(id);
     if (res.sucesso) {
       setMensagemSucesso(res.mensagem);
       setTimeout(() => setMensagemSucesso(null), 4000);

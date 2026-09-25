@@ -230,7 +230,7 @@ export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSett
     handleCarregarPreset('padrao');
   };
 
-  const handleSalvarRegraVendedor = (e: React.FormEvent) => {
+  const handleSalvarRegraVendedor = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const targetVendedorId = isAdmin
@@ -264,8 +264,8 @@ export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSett
     if (targetVendedorId === 'TODOS') {
       // Aplicar regra para todos os vendedores cadastrados
       let salvasCount = 0;
-      vendedores.forEach((v) => {
-        const r = salvarRegra({
+      for (const v of vendedores) {
+        const r = await salvarRegra({
           vendedor_id: v.id,
           tipo_comissao: tipoComissao,
           valor_fixo: tipoComissao === 'VALOR_FIXO' ? Number(valorFixo) : 0,
@@ -274,7 +274,7 @@ export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSett
           faixas: tipoComissao === 'ESCALONADO_ENTRADA' ? formatadasFaixas : [],
         });
         if (r.sucesso) salvasCount++;
-      });
+      }
       exibirFeedback(
         'sucesso',
         'Regra salva com sucesso.'
@@ -283,7 +283,7 @@ export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSett
       return;
     }
 
-    const res = salvarRegra({
+    const res = await salvarRegra({
       id: regraEmEdicaoId || undefined,
       vendedor_id: targetVendedorId,
       tipo_comissao: tipoComissao,
@@ -313,9 +313,9 @@ export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSett
     }
   };
 
-  const handleEncerrarVigencia = (regraId: string) => {
+  const handleEncerrarVigencia = async (regraId: string) => {
     const hoje = new Date().toISOString().split('T')[0];
-    const res = encerrarVigenciaRegra(regraId, hoje);
+    const res = await encerrarVigenciaRegra(regraId, hoje);
     if (res.sucesso) {
       exibirFeedback('sucesso', res.mensagem);
     } else {
@@ -350,9 +350,9 @@ export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSett
     setRegraParaExcluir(regra);
   };
 
-  const handleConfirmarExclusaoRegra = () => {
+  const handleConfirmarExclusaoRegra = async () => {
     if (!regraParaExcluir) return;
-    const res = excluirRegra(regraParaExcluir.id);
+    const res = await excluirRegra(regraParaExcluir.id);
     if (res.sucesso) {
       exibirFeedback('sucesso', res.mensagem);
       if (regraEmEdicaoId === regraParaExcluir.id) {
@@ -364,9 +364,9 @@ export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSett
     setRegraParaExcluir(null);
   };
 
-  const handleEncerrarRegraPeloModal = () => {
+  const handleEncerrarRegraPeloModal = async () => {
     if (!regraParaExcluir) return;
-    const res = encerrarVigenciaRegra(regraParaExcluir.id);
+    const res = await encerrarVigenciaRegra(regraParaExcluir.id);
     if (res.sucesso) {
       exibirFeedback('sucesso', res.mensagem);
     } else {
@@ -462,14 +462,14 @@ export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSett
     setModalMeioAberto(true);
   };
 
-  const handleSalvarMeioSubmit = (e: React.FormEvent) => {
+  const handleSalvarMeioSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) {
       exibirFeedback('erro', 'Apenas Administradores podem gerenciar meios de pagamento.');
       return;
     }
 
-    const res = salvarMeioPagamento({
+    const res = await salvarMeioPagamento({
       id: meioEmEdicao?.id,
       codigo: meioFormCodigo,
       label: meioFormLabel,
@@ -487,14 +487,14 @@ export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSett
     }
   };
 
-  const handleExcluirMeio = (m: MeioPagamentoConfig) => {
+  const handleExcluirMeio = async (m: MeioPagamentoConfig) => {
     if (!isAdmin) return;
     const confirmou = window.confirm(
       `Deseja realmente excluir o meio de pagamento "${m.label}" (${m.codigo})?`
     );
     if (!confirmou) return;
 
-    const res = excluirMeioPagamento(m.id);
+    const res = await excluirMeioPagamento(m.id);
     if (res.sucesso) {
       exibirFeedback('sucesso', res.mensagem);
     } else {
@@ -534,9 +534,9 @@ export function CommissionSettings({ abaInicial = 'vendedores' }: CommissionSett
     }
   };
 
-  const handleSalvarResidual = (valor: number) => {
+  const handleSalvarResidual = async (valor: number) => {
     if (!isAdmin) return;
-    salvarParametros({ percentual_comissao_padrao_residual: Math.max(0, valor) });
+    await salvarParametros({ percentual_comissao_padrao_residual: Math.max(0, valor) });
     exibirFeedback('sucesso', `Alíquota residual definida para ${valor.toFixed(2)}%.`);
   };
 

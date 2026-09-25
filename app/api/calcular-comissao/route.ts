@@ -3,7 +3,12 @@ import { query } from '@/lib/db';
 import { calcularComissao } from '@/lib/commission-engine';
 
 export async function POST(req: NextRequest) {
-  const { vendedor_id, valor_total_venda, valor_entrada_valida, data_venda, tipo_pagamento_entrada } = await req.json();
+  const perfil = req.headers.get('X-User-Perfil');
+  const userId = req.headers.get('X-Impersonating') || req.headers.get('X-User-Id')!;
+  const body = await req.json();
+  const { valor_total_venda, valor_entrada_valida, data_venda, tipo_pagamento_entrada } = body;
+  // Non-admins can only preview their own commission
+  const vendedor_id = perfil === 'ADMINISTRADOR' ? (body.vendedor_id || userId) : userId;
 
   const regraRes = await query(
     `SELECT r.*, json_agg(json_build_object(

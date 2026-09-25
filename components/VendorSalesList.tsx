@@ -70,9 +70,9 @@ export function VendorSalesList({
   } | null>(null);
   const [erroExclusao, setErroExclusao] = useState<string | null>(null);
 
-  const handleConfirmarExclusaoRascunho = () => {
+  const handleConfirmarExclusaoRascunho = async () => {
     if (!rascunhoParaExcluir) return;
-    const res = excluirRascunho(rascunhoParaExcluir.venda.id);
+    const res = await excluirRascunho(rascunhoParaExcluir.venda.id);
     if (res.sucesso) {
       setSucessoFeedback(res.mensagem);
       setRascunhoParaExcluir(null);
@@ -670,9 +670,9 @@ export function VendorSalesList({
                               </button>
 
                               <button
-                                onClick={() => {
+                                onClick={async () => {
                                   if (lancamento) {
-                                    submeterParaAprovacao(lancamento.id);
+                                    await submeterParaAprovacao(lancamento.id);
                                   }
                                 }}
                                 title="Submeter para aprovação do Administrador"

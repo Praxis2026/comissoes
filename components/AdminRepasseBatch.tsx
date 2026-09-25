@@ -175,7 +175,7 @@ export function AdminRepasseBatch() {
     );
   };
 
-  const handleLiquidarLote = () => {
+  const handleLiquidarLote = async () => {
     if (selecionados.length === 0) {
       alert('Selecione pelo menos um lançamento conferido para gerar o repasse.');
       return;
@@ -186,7 +186,7 @@ export function AdminRepasseBatch() {
       return;
     }
 
-    const res = liquidarRepasseLote({
+    const res = await liquidarRepasseLote({
       vendedor_id: vendedorSelecionadoId,
       lancamentos_ids: selecionados,
       data_repasse: dataRepasse,

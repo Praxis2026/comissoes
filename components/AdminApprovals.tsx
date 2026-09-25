@@ -85,22 +85,22 @@ export function AdminApprovals() {
       return true;
     });
 
-  const handleAprovar = (lancamentoId: string) => {
-    const res = aprovarLancamento(lancamentoId);
+  const handleAprovar = async (lancamentoId: string) => {
+    const res = await aprovarLancamento(lancamentoId);
     if (res.sucesso) {
       setToast({ tipo: 'sucesso', texto: res.mensagem });
       setTimeout(() => setToast(null), 4000);
     }
   };
 
-  const handleConfirmarRejeicao = () => {
+  const handleConfirmarRejeicao = async () => {
     if (!modalRejeicao) return;
     if (!justificativa.trim()) {
       alert('Informe a justificativa da rejeição.');
       return;
     }
 
-    const res = rejeitarLancamento(modalRejeicao.lancamentoId, justificativa);
+    const res = await rejeitarLancamento(modalRejeicao.lancamentoId, justificativa);
     if (res.sucesso) {
       setToast({ tipo: 'sucesso', texto: res.mensagem });
       setModalRejeicao(null);
@@ -109,14 +109,14 @@ export function AdminApprovals() {
     }
   };
 
-  const handleConfirmarEstorno = () => {
+  const handleConfirmarEstorno = async () => {
     if (!modalEstorno) return;
     if (!motivoEstorno.trim()) {
       alert('Informe o motivo do estorno.');
       return;
     }
 
-    const res = estornarLancamento(modalEstorno.lancamentoId, motivoEstorno);
+    const res = await estornarLancamento(modalEstorno.lancamentoId, motivoEstorno);
     if (res.sucesso) {
       setToast({ tipo: 'sucesso', texto: res.mensagem });
       setModalEstorno(null);

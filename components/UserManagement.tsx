@@ -283,7 +283,7 @@ export function UserManagement({ onFeedback }: UserManagementProps) {
   };
 
   // Salvar usuário
-  const handleSalvar = (e: React.FormEvent) => {
+  const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault();
     setErroForm(null);
 
@@ -315,7 +315,7 @@ export function UserManagement({ onFeedback }: UserManagementProps) {
       return;
     }
 
-    const resultado = salvarUsuario({
+    const resultado = await salvarUsuario({
       id: usuarioEdicao?.id,
       nome: nomeTrim,
       email: emailTrim,
@@ -337,8 +337,8 @@ export function UserManagement({ onFeedback }: UserManagementProps) {
   };
 
   // Alternar situação direto da tabela
-  const handleToggleSituacao = (usuarioId: string) => {
-    const res = toggleAtivoUsuario(usuarioId);
+  const handleToggleSituacao = async (usuarioId: string) => {
+    const res = await toggleAtivoUsuario(usuarioId);
     if (!res.sucesso) {
       dispararFeedback('erro', res.mensagem);
     } else {
@@ -347,9 +347,9 @@ export function UserManagement({ onFeedback }: UserManagementProps) {
   };
 
   // Confirmar exclusão de usuário
-  const handleConfirmarExclusao = () => {
+  const handleConfirmarExclusao = async () => {
     if (!usuarioParaExcluir) return;
-    const res = excluirUsuario(usuarioParaExcluir.id);
+    const res = await excluirUsuario(usuarioParaExcluir.id);
     if (!res.sucesso) {
       dispararFeedback('erro', res.mensagem);
     } else {
@@ -692,8 +692,8 @@ export function UserManagement({ onFeedback }: UserManagementProps) {
                           {/* Botão de Incorporar / Atuar como este Usuário (disponível para administradores) */}
                           {(usuarioAtual.perfil_nome === 'ADMINISTRADOR' || adminOriginal !== null) && !isConectado && (
                             <button
-                              onClick={() => {
-                                const res = incorporarUsuario(u.id);
+                              onClick={async () => {
+                                const res = await incorporarUsuario(u.id);
                                 if (res.sucesso) {
                                   onFeedback?.('sucesso', res.mensagem);
                                 }

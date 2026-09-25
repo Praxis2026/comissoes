@@ -69,9 +69,9 @@ export function AdminCommissionRules() {
       : lancamentosDaRegraParaExcluir.length;
   const temVendaAssociadaExclusao = totalVendasAssociadasExclusao > 0;
 
-  const handleConfirmarExclusaoRegra = () => {
+  const handleConfirmarExclusaoRegra = async () => {
     if (!regraParaExcluir) return;
-    const res = excluirRegra(regraParaExcluir.id);
+    const res = await excluirRegra(regraParaExcluir.id);
     setFeedback(res.mensagem);
     setRegraParaExcluir(null);
   };
@@ -108,7 +108,7 @@ export function AdminCommissionRules() {
     });
   };
 
-  const handleSalvarRegra = (e: React.FormEvent) => {
+  const handleSalvarRegra = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!vigenciaInicio) {
@@ -129,7 +129,7 @@ export function AdminCommissionRules() {
       percentual_comissao: Number(f.comissao),
     }));
 
-    const res = salvarRegra({
+    const res = await salvarRegra({
       vendedor_id: vendedorSelecionadoId,
       tipo_comissao: tipoComissao,
       valor_fixo: Number(valorFixo) || 0,
