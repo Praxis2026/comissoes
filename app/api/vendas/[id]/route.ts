@@ -7,8 +7,22 @@ function normalizarTipoPagamento(tipo: string): string {
   return ENUM_VALIDOS.includes(tipo as typeof ENUM_VALIDOS[number]) ? tipo : 'OUTRO';
 }
 
+async function checkOwnership(vendaId: string, userId: string, isAdmin: boolean): Promise<boolean> {
+  if (isAdmin) return true;
+  const res = await pool.query('SELECT vendedor_id FROM vendas WHERE id = $1', [vendaId]);
+  return res.rows[0]?.vendedor_id === userId;
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const perfil = req.headers.get('X-User-Perfil');
+  const userId = req.headers.get('X-Impersonating') || req.headers.get('X-User-Id')!;
+  const isAdmin = perfil === 'ADMINISTRADOR';
+
+  if (!(await checkOwnership(id, userId, isAdmin))) {
+    return NextResponse.json({ erro: 'Sem permissão para editar esta venda' }, { status: 403 });
+  }
+
   const body = await req.json();
   const { numero_documento, cliente_nome, data_venda, valor_total_venda,
           valor_entrada_valida, tipo_pagamento_entrada, procedimentos } = body;
@@ -50,8 +64,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const perfil = req.headers.get('X-User-Perfil');
+  const userId = req.headers.get('X-Impersonating') || req.headers.get('X-User-Id')!;
+  const isAdmin = perfil === 'ADMINISTRADOR';
+
+  if (!(await checkOwnership(id, userId, isAdmin))) {
+    return NextResponse.json({ erro: 'Sem permissão para excluir esta venda' }, { status: 403 });
+  }
+
   try {
     await pool.query('DELETE FROM vendas WHERE id = $1', [id]);
     return NextResponse.json({ ok: true });

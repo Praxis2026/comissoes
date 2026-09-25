@@ -9,7 +9,12 @@ function normalizarTipoPagamento(tipo: string): string {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const vendedorId = searchParams.get('vendedor_id');
+  const perfil = req.headers.get('X-User-Perfil');
+  const userId = req.headers.get('X-Impersonating') || req.headers.get('X-User-Id')!;
+  const isAdmin = perfil === 'ADMINISTRADOR';
+
+  // Non-admins can only see their own vendas
+  const vendedorId = isAdmin ? searchParams.get('vendedor_id') : userId;
 
   const whereClause = vendedorId ? 'WHERE v.vendedor_id = $1' : '';
   const params = vendedorId ? [vendedorId] : [];
@@ -33,12 +38,16 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = req.headers.get('X-User-Id')!;
+  const perfil = req.headers.get('X-User-Perfil');
+  const userId = req.headers.get('X-Impersonating') || req.headers.get('X-User-Id')!;
+  const isAdmin = perfil === 'ADMINISTRADOR';
+
   const body = await req.json();
   const { numero_documento, cliente_nome, data_venda, valor_total_venda,
           valor_entrada_valida, tipo_pagamento_entrada, procedimentos, vendedor_id } = body;
 
-  const vendId = vendedor_id || userId;
+  // Non-admins can only create vendas for themselves
+  const vendId = isAdmin && vendedor_id ? vendedor_id : userId;
   const tipo = normalizarTipoPagamento(tipo_pagamento_entrada);
 
   const client = await pool.connect();
