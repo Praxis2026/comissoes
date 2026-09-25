@@ -157,6 +157,43 @@ const USUARIO_VAZIO: Usuario = {
   permissoes: [],
 };
 
+// pg driver returns NUMERIC/DECIMAL columns as strings — coerce at data boundary
+function normalizarVenda(v: Venda): Venda {
+  return {
+    ...v,
+    valor_total_venda: Number(v.valor_total_venda),
+    valor_entrada_valida: Number(v.valor_entrada_valida),
+  };
+}
+
+function normalizarLancamento(l: LancamentoComissao): LancamentoComissao {
+  return {
+    ...l,
+    valor_base_calculo: Number(l.valor_base_calculo),
+    percentual_entrada_calculado: Number(l.percentual_entrada_calculado),
+    entrada_valida_considerada: Number(l.entrada_valida_considerada),
+    aliquota_ou_fixo_aplicado: Number(l.aliquota_ou_fixo_aplicado),
+    valor_comissao_calculado: Number(l.valor_comissao_calculado),
+  };
+}
+
+function normalizarRepasse(r: Repasse): Repasse {
+  return { ...r, valor_total_repassado: Number(r.valor_total_repassado) };
+}
+
+function normalizarRegra(r: RegraComissaoVendedor): RegraComissaoVendedor {
+  return {
+    ...r,
+    valor_fixo: Number(r.valor_fixo),
+    faixas: r.faixas?.map((f) => ({
+      ...f,
+      percentual_entrada_min: Number(f.percentual_entrada_min),
+      percentual_entrada_max: f.percentual_entrada_max != null ? Number(f.percentual_entrada_max) : null,
+      percentual_comissao: Number(f.percentual_comissao),
+    })),
+  };
+}
+
 export function CommissionProvider({ children }: { children: React.ReactNode }) {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [usuarioAtual, setUsuarioAtualState] = useState<Usuario>(USUARIO_VAZIO);
@@ -210,10 +247,10 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
           isAdmin ? fetch('/api/usuarios') : Promise.resolve(null),
         ]);
 
-        if (vendasRes.ok) setVendas(await vendasRes.json());
-        if (lancRes.ok) setLancamentos(await lancRes.json());
-        if (repassesRes.ok) setRepasses(await repassesRes.json());
-        if (regrasRes.ok) setRegras(await regrasRes.json());
+        if (vendasRes.ok) setVendas((await vendasRes.json()).map(normalizarVenda));
+        if (lancRes.ok) setLancamentos((await lancRes.json()).map(normalizarLancamento));
+        if (repassesRes.ok) setRepasses((await repassesRes.json()).map(normalizarRepasse));
+        if (regrasRes.ok) setRegras((await regrasRes.json()).map(normalizarRegra));
         if (cfgRes.ok) {
           const cfg = await cfgRes.json();
           setParametros(cfg);
@@ -259,10 +296,10 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
         fetch('/api/configuracoes'),
         u.perfil_nome === 'ADMINISTRADOR' ? fetch('/api/usuarios') : Promise.resolve(null),
       ]);
-      if (vendasRes.ok) setVendas(await vendasRes.json());
-      if (lancRes.ok) setLancamentos(await lancRes.json());
-      if (repassesRes.ok) setRepasses(await repassesRes.json());
-      if (regrasRes.ok) setRegras(await regrasRes.json());
+      if (vendasRes.ok) setVendas((await vendasRes.json()).map(normalizarVenda));
+      if (lancRes.ok) setLancamentos((await lancRes.json()).map(normalizarLancamento));
+      if (repassesRes.ok) setRepasses((await repassesRes.json()).map(normalizarRepasse));
+      if (regrasRes.ok) setRegras((await regrasRes.json()).map(normalizarRegra));
       if (cfgRes.ok) {
         const cfg = await cfgRes.json();
         setParametros(cfg);
@@ -403,7 +440,9 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
       const data = await res.json();
       if (!res.ok) return { sucesso: false, mensagem: data.erro || 'Erro ao salvar venda.' };
 
-      const { venda, lancamento } = data;
+      const { venda: vendaRaw, lancamento: lancamentoRaw } = data;
+      const venda = normalizarVenda(vendaRaw);
+      const lancamento = lancamentoRaw ? normalizarLancamento(lancamentoRaw) : lancamentoRaw;
       setVendas((prev) => {
         const idx = prev.findIndex((v) => v.id === venda.id);
         return idx >= 0 ? prev.map((v) => (v.id === venda.id ? venda : v)) : [venda, ...prev];
@@ -510,7 +549,7 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
     });
     const data = await res.json();
     if (!res.ok) return { sucesso: false, mensagem: data.erro || 'Erro ao criar repasse.' };
-    const novosRepasses: Repasse[] = Array.isArray(data) ? data : [data];
+    const novosRepasses: Repasse[] = (Array.isArray(data) ? data : [data]).map(normalizarRepasse);
     setRepasses((prev) => [...novosRepasses, ...prev]);
     const idsLiquidados = dados.lancamentos_ids;
     setLancamentos((prev) =>
@@ -621,7 +660,7 @@ export function CommissionProvider({ children }: { children: React.ReactNode }) 
     });
     const data = await res.json();
     if (!res.ok) return { sucesso: false, mensagem: data.erro || 'Erro ao salvar regra.' };
-    setRegras((prev) => [data, ...prev.filter((r) => r.vendedor_id !== regraData.vendedor_id || r.vigencia_fim !== null)]);
+    setRegras((prev) => [normalizarRegra(data), ...prev.filter((r) => r.vendedor_id !== regraData.vendedor_id || r.vigencia_fim !== null)]);
     return { sucesso: true, mensagem: 'Regra de comissão salva com sucesso!', regraId: data.id };
   };
 
