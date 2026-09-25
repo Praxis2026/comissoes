@@ -1,9 +1,5 @@
 import { Pool } from 'pg';
 
-if (process.env.NODE_ENV === 'production' && !process.env.PGPASSWORD) {
-  throw new Error('PGPASSWORD environment variable is required in production');
-}
-
 const pool = new Pool({
   host: process.env.PGHOST || 'localhost',
   port: parseInt(process.env.PGPORT || '5432'),
