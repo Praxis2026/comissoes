@@ -1,0 +1,9 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { query } from '@/lib/db';
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { ativo } = await req.json();
+  await query('UPDATE usuarios SET ativo = $1 WHERE id = $2', [Boolean(ativo), id]);
+  return NextResponse.json({ ok: true, ativo: Boolean(ativo) });
+}
