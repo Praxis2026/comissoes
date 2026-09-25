@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import pool, { query } from '@/lib/db';
 
-export async function GET() {
+function requireAdmin(req: NextRequest): NextResponse | null {
+  if (req.headers.get('X-User-Perfil') !== 'ADMINISTRADOR') {
+    return NextResponse.json({ erro: 'Apenas administradores podem acessar esta rota' }, { status: 403 });
+  }
+  return null;
+}
+
+export async function GET(req: NextRequest) {
+  const deny = requireAdmin(req);
+  if (deny) return deny;
+
   const result = await query(
     `SELECT u.id, u.perfil_id, p.codigo AS perfil_nome, u.nome, u.email, u.cargo,
             u.ativo, u.criado_em,
@@ -20,6 +30,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const deny = requireAdmin(req);
+  if (deny) return deny;
+
   const { nome, email, senha, perfil_nome, cargo, permissoes } = await req.json();
   if (!nome || !email || !senha || !perfil_nome) {
     return NextResponse.json(

@@ -19,7 +19,10 @@ export async function POST(req: NextRequest) {
     );
 
     const usuario = result.rows[0];
-    if (!usuario || !(await bcrypt.compare(senha, usuario.senha_hash))) {
+    // Always run bcrypt.compare to prevent email enumeration via timing
+    const DUMMY_HASH = '$2b$12$invalidhashfortimingpreventionXXXXXXXXXXXXXXXXXXXXXXX';
+    const senhaValida = await bcrypt.compare(senha, usuario ? usuario.senha_hash : DUMMY_HASH);
+    if (!usuario || !senhaValida) {
       return NextResponse.json({ erro: 'Email ou senha incorretos' }, { status: 401 });
     }
 

@@ -33,7 +33,7 @@ export async function middleware(req: NextRequest) {
 
   const impToken = req.cookies.get('jwt-impersonate')?.value;
   if (impToken) {
-    const impPayload = await verifyJwt(impToken);
+    const impPayload = await verifyJwt(impToken, 'impersonate');
     if (impPayload) {
       cleanHeaders.set('X-Impersonating', impPayload.sub);
     }

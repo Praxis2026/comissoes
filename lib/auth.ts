@@ -18,19 +18,27 @@ export interface JwtPayload {
 }
 
 export async function signJwt(payload: JwtPayload): Promise<string> {
-  return new SignJWT({ ...payload })
+  return new SignJWT({ ...payload, type: 'auth' })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('8h')
     .sign(getSecret());
 }
 
-export async function verifyJwt(token: string): Promise<JwtPayload | null> {
+export async function signImpersonateJwt(payload: JwtPayload): Promise<string> {
+  return new SignJWT({ ...payload, type: 'impersonate' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime('8h')
+    .sign(getSecret());
+}
+
+export async function verifyJwt(token: string, expectedType: 'auth' | 'impersonate' = 'auth'): Promise<JwtPayload | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret());
     if (
       typeof payload.sub !== 'string' ||
       typeof payload.perfil !== 'string' ||
-      typeof payload.nome !== 'string'
+      typeof payload.nome !== 'string' ||
+      payload.type !== expectedType
     ) {
       return null;
     }

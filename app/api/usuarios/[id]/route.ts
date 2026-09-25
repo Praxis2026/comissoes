@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import pool, { query } from '@/lib/db';
 
+function requireAdmin(req: NextRequest): NextResponse | null {
+  if (req.headers.get('X-User-Perfil') !== 'ADMINISTRADOR') {
+    return NextResponse.json({ erro: 'Apenas administradores podem acessar esta rota' }, { status: 403 });
+  }
+  return null;
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const deny = requireAdmin(req);
+  if (deny) return deny;
   const { id } = await params;
   const { nome, cargo, senha, perfil_nome, permissoes } = await req.json();
 
@@ -54,7 +63,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const deny = requireAdmin(req);
+  if (deny) return deny;
   const { id } = await params;
   try {
     await query('UPDATE usuarios SET ativo = false WHERE id = $1', [id]);

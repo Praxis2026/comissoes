@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { signJwt } from '@/lib/auth';
+import { signImpersonateJwt } from '@/lib/auth';
 import { query } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   const u = result.rows[0];
-  const token = await signJwt({ sub: u.id, perfil: u.perfil_nome, nome: u.nome });
+  const token = await signImpersonateJwt({ sub: u.id, perfil: u.perfil_nome, nome: u.nome });
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set('jwt-impersonate', token, {
